@@ -111,11 +111,22 @@ class MonitorLoopHandler:
         if not config.waiting_for_thinking:
             return MonitorLoopResponse(config=config, timer_task=command.timer_task)
 
-        content = "\n\n---\n\n".join(config.accumulated_thinking)
-        cmd = CommitThinkingCommand(message=content, simulate=config.simulate)
+        thinking = config.accumulated_thinking
+        # Apply sonnet transformation if enabled
+        if config.sonnet_enabled:
+            resp = await TransformThinkingHandler.handle(
+                TransformThinkingCommand(thinking_lines=thinking, enable_streaming=False, enable_colors=False),
+                config=config
+            )
+            thinking = list(resp.transformed_lines)
+        # Format and join
+        formatted = []
+        for line in thinking:
+            formatted.extend(format_thinking_line(line, max_length=config.thinking_line_max_length))
+        content = "\n\n---\n\n".join(formatted)
 
         if command.enable_git:
-            CommitThinkingHandler.handle(cmd)
+            CommitThinkingHandler.handle(CommitThinkingCommand(message=content, simulate=config.simulate))
 
         config.last_processed_uuid = config.waiting_target_uuid
         config.waiting_for_thinking = False
@@ -202,35 +213,27 @@ class MonitorLoopHandler:
             SaveConfigHandler.handle(SaveConfigCommand(config=config, config_path=get_config_path()))
             return MonitorLoopResponse(config=config, timer_task=timer_task)
 
-        # Display thinking entries with optional transformation
         for entry in parse_resp.entries:
             thinking_content = entry.get_thinking_content()
             if thinking_content:
-                # Add separator between all thinking entries (across all poll cycles)
                 if MonitorLoopHandler._has_shown_thinking:
                     if config.verbose:
-                        # Split separator by lines and log each with timestamp
-                        separator_lines = config.thinking_separator.split("\n")
-                        for sep_line in separator_lines:
+                        for sep_line in config.thinking_separator.split("\n"):
                             logger.info("%s", sep_line)
-                    # Print separator - if it doesn't end with newline, add one
-                    elif config.thinking_separator.endswith("\n"):
-                        print(config.thinking_separator, end="")  # noqa: T201
                     else:
-                        print(config.thinking_separator)  # noqa: T201
-
-                # Mark that we've shown thinking (for future iterations)
+                        print(config.thinking_separator, end="" if config.thinking_separator.endswith("\n") else "\n")  # noqa: T201
                 MonitorLoopHandler._has_shown_thinking = True
 
                 if config.sonnet_enabled:
-                    transform_cmd = TransformThinkingCommand(
-                        thinking_lines=[thinking_content],
-                        enable_streaming=config.sonnet_streaming,
-                        enable_colors=config.sonnet_colors,
+                    transform_resp = await TransformThinkingHandler.handle(
+                        TransformThinkingCommand(
+                            thinking_lines=[thinking_content],
+                            enable_streaming=config.sonnet_streaming,
+                            enable_colors=config.sonnet_colors
+                        ),
+                        config=command.config
                     )
-                    transform_resp = await TransformThinkingHandler.handle(transform_cmd, config=command.config)
                     for line in transform_resp.transformed_lines:
-                        # Format long lines (preserving color) and display
                         for formatted_line in format_colored_thinking_line(
                             line, max_length=config.thinking_line_max_length
                         ):
@@ -248,18 +251,14 @@ class MonitorLoopHandler:
                         else:
                             print(formatted_line)  # noqa: T201
 
-        # Ensure branch exists
         if command.enable_git:
             EnsureBranchHandler.handle(
                 EnsureBranchCommand(branch_name=find_resp.jsonl_path.stem)
             )
 
-        # Process thinking entries
-        proc_cmd = ProcessThinkingCommand(entries=parse_resp.entries, config=config)
-        proc_resp = ProcessThinkingHandler.handle(proc_cmd)
+        proc_resp = ProcessThinkingHandler.handle(ProcessThinkingCommand(entries=parse_resp.entries, config=config))
         config = proc_resp.current_config
 
-        # Handle commit with optional transformation
         if proc_resp.should_commit:
             thinking_to_commit = proc_resp.thinking_to_commit
 
