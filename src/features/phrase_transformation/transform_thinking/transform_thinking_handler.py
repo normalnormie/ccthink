@@ -32,8 +32,9 @@ def extract_code_blocks(text: str) -> tuple[list[str], list[str]]:
         - compressible_segments: Only the text outside code blocks.
         - all_segments_with_markers: All segments with marker strings to indicate code blocks.
     """
-    # Split on code block markers: ``` optionally followed by language name, then newline
-    code_block_regex = r'(```[^\n]*\n)'
+    # Split on code block markers: ``` optionally followed by language name and optional newline
+    # Handles both multiline blocks (```python\n) and inline blocks (```python or ```)
+    code_block_regex = r'(```[^\n]*\n?)'
 
     segments = re.split(code_block_regex, text)
 
@@ -72,8 +73,8 @@ def reassemble_with_code_blocks(
     Returns:
         Reassembled text with code blocks intact and other parts compressed.
     """
-    # Re-split original to get code blocks
-    code_block_regex = r'(```[^\n]*\n)'
+    # Re-split original to get code blocks (must match extract_code_blocks regex)
+    code_block_regex = r'(```[^\n]*\n?)'
     original_segments = re.split(code_block_regex, original_text)
 
     result_parts: list[str] = []
@@ -173,35 +174,43 @@ class TransformThinkingHandler:
                 colors.append(color)
             else:
                 # No code blocks - compress normally
-                result = await compression_service.compress(line)
+                try:
+                    result = await compression_service.compress(line)
 
-                if isinstance(result, BaseException):
-                    # Exception occurred
-                    logger.error("Compression failed for line: %s", result)
-                    transformed_lines.append(line)  # Use original
-                    colors.append(37)  # Default white color
-                    errors.append(f"⚠️  Compression error: {result}")
-                    overall_success = False
-                elif "error" in result:
-                    # Compression returned error dict
-                    logger.warning("Compression error: %s", result.get("error"))
-                    transformed_lines.append(line)  # Use original
-                    colors.append(37)  # Default white color
-                    errors.append(f"⚠️  {result.get('error')}")
-                    overall_success = False
-                else:
-                    # Success
-                    compressed_text = result.get("text", line)
-                    color = int(result.get("color", 37))
-
-                    # Apply color if enabled
-                    if command.enable_colors:
-                        formatted_text = colored_formatter.format(compressed_text, color)
-                        transformed_lines.append(formatted_text)
+                    if isinstance(result, BaseException):
+                        # Exception occurred
+                        logger.error("Compression failed for line: %s", result)
+                        transformed_lines.append(line)  # Use original
+                        colors.append(37)  # Default white color
+                        errors.append(f"⚠️  Compression error: {result}")
+                        overall_success = False
+                    elif "error" in result:
+                        # Compression returned error dict
+                        logger.warning("Compression error: %s", result.get("error"))
+                        transformed_lines.append(line)  # Use original
+                        colors.append(37)  # Default white color
+                        errors.append(f"⚠️  {result.get('error')}")
+                        overall_success = False
                     else:
-                        transformed_lines.append(compressed_text)
+                        # Success
+                        compressed_text = result.get("text", line)
+                        color = int(result.get("color", 37))
 
-                    colors.append(color)
+                        # Apply color if enabled
+                        if command.enable_colors:
+                            formatted_text = colored_formatter.format(compressed_text, color)
+                            transformed_lines.append(formatted_text)
+                        else:
+                            transformed_lines.append(compressed_text)
+
+                        colors.append(color)
+                except Exception as e:
+                    # Catch any exceptions from compression (broad catch intentional for robustness)
+                    logger.exception("Compression exception for line")
+                    transformed_lines.append(line)  # Use original
+                    colors.append(37)  # Default white color
+                    errors.append(f"⚠️  Compression error: {e}")
+                    overall_success = False
 
         return TransformThinkingResponse(
             transformed_lines=transformed_lines,
