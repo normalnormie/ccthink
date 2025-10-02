@@ -1,0 +1,3 @@
+{"parentUuid": "uuid-100", "type": "assistant", "message": {"role": "assistant", "content": [{"type": "thinking", "thinking": "First thinking entry"}]}, "timestamp": "2025-10-01T11:00:00Z"}
+{"parentUuid": "uuid-100", "type": "assistant", "message": {"role": "assistant", "content": [{"type": "thinking", "thinking": "Second thinking entry for same parent"}]}, "timestamp": "2025-10-01T11:01:00Z"}
+{"parentUuid": "uuid-100", "type": "assistant", "message": {"role": "assistant", "content": [{"type": "thinking", "thinking": "Third thinking entry for same parent"}]}, "timestamp": "2025-10-01T11:02:00Z"}
