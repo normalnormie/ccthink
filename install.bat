@@ -16,16 +16,24 @@ set WRAPPER=%WRAPPER_DIR%\ccthink.bat
 
 REM Check Python installation
 echo Checking Python installation...
+set PYTHON_CMD=
 python --version >nul 2>&1
-if errorlevel 1 (
-    echo [ERROR] Python not found
-    echo Please install Python 3.10 or later from https://python.org
-    pause
-    exit /b 1
+if not errorlevel 1 (
+    set PYTHON_CMD=python
+) else (
+    python3 --version >nul 2>&1
+    if not errorlevel 1 (
+        set PYTHON_CMD=python3
+    ) else (
+        echo [ERROR] Neither python nor python3 found
+        echo Please install Python 3.10 or later from https://python.org
+        pause
+        exit /b 1
+    )
 )
 
-for /f "tokens=2" %%v in ('python --version 2^>^&1') do set PYTHON_VERSION=%%v
-echo [OK] Found Python %PYTHON_VERSION%
+for /f "tokens=2" %%v in ('!PYTHON_CMD! --version 2^>^&1') do set PYTHON_VERSION=%%v
+echo [OK] Found Python %PYTHON_VERSION% (using !PYTHON_CMD!)
 
 REM Create installation directory
 echo.
@@ -46,7 +54,7 @@ if not exist "%WRAPPER_DIR%" mkdir "%WRAPPER_DIR%"
 
 echo @echo off > "%WRAPPER%"
 echo REM ccthink launcher - preserves current directory >> "%WRAPPER%"
-echo python "%%LOCALAPPDATA%%\Programs\ccthink\ccthink" %%* >> "%WRAPPER%"
+echo !PYTHON_CMD! "%%LOCALAPPDATA%%\Programs\ccthink\ccthink" %%* >> "%WRAPPER%"
 
 echo [OK] Launcher created: %WRAPPER%
 
@@ -70,9 +78,9 @@ echo.
 echo Checking Python dependencies...
 set MISSING_DEPS=
 
-python -c "import pydantic" 2>nul || set MISSING_DEPS=!MISSING_DEPS! pydantic
-python -c "import orjson" 2>nul || set MISSING_DEPS=!MISSING_DEPS! orjson
-python -c "import pytest" 2>nul || set MISSING_DEPS=!MISSING_DEPS! pytest
+!PYTHON_CMD! -c "import pydantic" 2>nul || set MISSING_DEPS=!MISSING_DEPS! pydantic
+!PYTHON_CMD! -c "import orjson" 2>nul || set MISSING_DEPS=!MISSING_DEPS! orjson
+!PYTHON_CMD! -c "import pytest" 2>nul || set MISSING_DEPS=!MISSING_DEPS! pytest
 
 if "!MISSING_DEPS!"=="" (
     echo [OK] All dependencies installed

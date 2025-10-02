@@ -22,18 +22,23 @@ echo ""
 
 # Check Python version
 echo "Checking Python installation..."
-if ! command -v python3 &> /dev/null; then
-    echo -e "${RED}Error: python3 not found${NC}"
+PYTHON_CMD=""
+if command -v python3 &> /dev/null; then
+    PYTHON_CMD="python3"
+elif command -v python &> /dev/null; then
+    PYTHON_CMD="python"
+else
+    echo -e "${RED}Error: Neither python3 nor python found${NC}"
     echo "Please install Python 3.10 or later"
     exit 1
 fi
 
-PYTHON_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
-echo -e "${GREEN}✓${NC} Found Python $PYTHON_VERSION"
+PYTHON_VERSION=$($PYTHON_CMD -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
+echo -e "${GREEN}✓${NC} Found Python $PYTHON_VERSION (using $PYTHON_CMD)"
 
 # Check if Python version is sufficient (3.10+)
-PYTHON_MAJOR=$(python3 -c 'import sys; print(sys.version_info.major)')
-PYTHON_MINOR=$(python3 -c 'import sys; print(sys.version_info.minor)')
+PYTHON_MAJOR=$($PYTHON_CMD -c 'import sys; print(sys.version_info.major)')
+PYTHON_MINOR=$($PYTHON_CMD -c 'import sys; print(sys.version_info.minor)')
 if [ "$PYTHON_MAJOR" -lt 3 ] || { [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 10 ]; }; then
     echo -e "${RED}Error: Python 3.10 or later required${NC}"
     echo "Current version: $PYTHON_VERSION"
@@ -63,16 +68,19 @@ echo -e "${GREEN}✓${NC} Symlink created: $BIN_LINK"
 # Check if ~/.local/bin is in PATH
 echo ""
 echo "Checking PATH configuration..."
-if [[ ":$PATH:" == *":$BIN_DIR:"* ]]; then
-    echo -e "${GREEN}✓${NC} $BIN_DIR is in PATH"
-else
-    echo -e "${YELLOW}⚠${NC} $BIN_DIR is NOT in PATH"
-    echo ""
-    echo "Add this to your shell profile (~/.bashrc, ~/.zshrc, or ~/.profile):"
-    echo ""
-    echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
-    echo ""
-fi
+case ":$PATH:" in
+    *":$BIN_DIR:"*)
+        echo -e "${GREEN}✓${NC} $BIN_DIR is in PATH"
+        ;;
+    *)
+        echo -e "${YELLOW}⚠${NC} $BIN_DIR is NOT in PATH"
+        echo ""
+        echo "Add this to your shell profile (~/.bashrc, ~/.zshrc, or ~/.profile):"
+        echo ""
+        echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
+        echo ""
+        ;;
+esac
 
 # Check dependencies
 echo ""
@@ -81,7 +89,7 @@ MISSING_DEPS=()
 
 # Check each dependency
 for dep in "pydantic" "orjson" "pytest"; do
-    if ! python3 -c "import $dep" 2>/dev/null; then
+    if ! $PYTHON_CMD -c "import $dep" 2>/dev/null; then
         MISSING_DEPS+=("$dep")
     fi
 done

@@ -5,8 +5,12 @@
 import sys
 from pathlib import Path
 
+# Resolve symlink to get actual installation directory
+script_path = Path(__file__).resolve()
+install_dir = script_path.parent
+
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(install_dir / "src"))
 
 from main import main
 

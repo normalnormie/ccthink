@@ -27,12 +27,17 @@ echo -e "${GREEN}This will be preserved:${NC}"
 echo "  - Project-specific ccthink.conf files"
 echo "  - ~/.config/ccthink directory"
 echo ""
-read -p "Continue? (y/N) " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Uninstallation cancelled"
-    exit 0
-fi
+printf "Continue? (y/N) "
+read -r REPLY
+case "$REPLY" in
+    [Yy]|[Yy][Ee][Ss])
+        # Continue with uninstallation
+        ;;
+    *)
+        echo "Uninstallation cancelled"
+        exit 0
+        ;;
+esac
 
 echo ""
 echo "Uninstalling ccthink..."
