@@ -134,13 +134,19 @@ def format_thinking_line(
 
         # No good breakpoint found but exceeding max_length
         if split_at is None and len(remaining) > max_length:
-            # Force split at last space before max_length
-            space_idx = remaining.rfind(" ", 0, max_length)
-            if space_idx != -1:
-                split_at = space_idx + 1
+            # Try to split at path separator first (keeps paths together)
+            slash_idx = remaining.rfind("/", 0, max_length)
+            if slash_idx != -1 and slash_idx >= min_line_length:
+                # Split after the slash to keep path segment on next line
+                split_at = slash_idx + 1
             else:
-                # No space found, hard split at max_length
-                split_at = max_length
+                # Force split at last space before max_length
+                space_idx = remaining.rfind(" ", 0, max_length)
+                if space_idx != -1:
+                    split_at = space_idx + 1
+                else:
+                    # No space found, hard split at max_length
+                    split_at = max_length
 
         if split_at:
             # Split here and continue
