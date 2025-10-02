@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="ccthink.png" alt="ccthink">
+</p>
+
 # ccthink
 
 **Monitor Claude thinking in real-time with smart accumulation, optional AI compression, and sentiment-based coloring.**
