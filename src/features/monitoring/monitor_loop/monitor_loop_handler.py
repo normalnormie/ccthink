@@ -119,11 +119,12 @@ class MonitorLoopHandler:
                 config=config
             )
             thinking = list(resp.transformed_lines)
-        # Format and join
-        formatted = []
+        # Format each entry and join entries with separator
+        formatted_entries = []
         for line in thinking:
-            formatted.extend(format_thinking_line(line, max_length=config.thinking_line_max_length))
-        content = "\n\n---\n\n".join(formatted)
+            formatted_lines = format_thinking_line(line, max_length=config.thinking_line_max_length)
+            formatted_entries.append("\n".join(formatted_lines))
+        content = "\n\n---\n\n".join(formatted_entries)
 
         if command.enable_git:
             CommitThinkingHandler.handle(CommitThinkingCommand(message=content, simulate=config.simulate))
@@ -172,7 +173,7 @@ class MonitorLoopHandler:
         return MonitorLoopResponse(config=config, timer_task=command.timer_task)
 
     @staticmethod
-    async def handle(command: MonitorLoopCommand) -> MonitorLoopResponse:  # noqa: C901, PLR0912, PLR0914, PLR0915
+    async def handle(command: MonitorLoopCommand) -> MonitorLoopResponse:  # noqa: C901, PLR0912, PLR0914
         """Execute one monitor loop iteration.
 
         Args:
@@ -271,12 +272,12 @@ class MonitorLoopHandler:
                 transform_resp = await TransformThinkingHandler.handle(transform_cmd, config=command.config)
                 thinking_to_commit = list(transform_resp.transformed_lines)
 
-            # Format each thinking line for optimal readability
-            formatted_lines: list[str] = []
-            for line in thinking_to_commit:
-                formatted_lines.extend(format_thinking_line(line, max_length=config.thinking_line_max_length))
-
-            content = "\n\n---\n\n".join(formatted_lines)
+            # Format each entry and join entries with separator
+            formatted_entries = [
+                "\n".join(format_thinking_line(line, max_length=config.thinking_line_max_length))
+                for line in thinking_to_commit
+            ]
+            content = "\n\n---\n\n".join(formatted_entries)
             if command.enable_git:
                 CommitThinkingHandler.handle(
                     CommitThinkingCommand(message=content, simulate=config.simulate)
