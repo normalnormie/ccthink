@@ -11,6 +11,7 @@ ccthink watches your Claude Code conversation sessions, extracts thinking conten
 ## What It Does
 
 - **Displays thinking** as it arrives from Claude Code sessions
+- **Shows tool uses** (Bash, Read, Write, etc.) in chronological order with thinking
 - **Accumulates thinking entries** before committing (prevents commit spam)
 - **Compresses phrases** using Sonnet to make thinking more scannable
 - **Applies sentiment colors** via ANSI 256 codes for visual feedback
@@ -94,6 +95,7 @@ ccthink stores settings in `ccthink.conf` in your project directory. On first ru
   "sonnet_enabled": false,
   "sonnet_streaming": false,
   "sonnet_colors": false,
+  "tool_uses": true,
   "poll_interval_seconds": 1.0,
   "thinking_line_max_length": 55,
   "main_branch": "master"
@@ -230,6 +232,36 @@ the best approach for implementation using
 existing patterns
 ```
 
+### Displaying Tool Uses
+
+Shows Claude Code tool calls alongside thinking in chronological order.
+
+**What it does:**
+
+- Captures Bash, Read, Write, Edit, Task, and other tool invocations
+- Displays full file paths and command details
+- Maintains chronological ordering with thinking entries
+- Configurable via `tool_uses` flag (defaults to true)
+
+**Display format:**
+
+```
+Analyzing requirements...
+Bash(mkdir -p /home/user/project/src)
+Write(/home/user/project/src/main.py)
+Files created successfully...
+```
+
+**Disable tool use display:**
+
+Edit `ccthink.conf`:
+
+```json
+{
+  "tool_uses": false
+}
+```
+
 ### Committing Thinking
 
 Creates git commits with thinking content as the commit message.
@@ -318,6 +350,7 @@ Extended settings in `ccthink.conf`:
   "thinking_line_max_length": 55,
   "thinking_separator": "\n\n---\n\n",
   "main_branch": "master",
+  "tool_uses": true,
   "quit_on_conflict": false,
   "projects_dir": "~/.claude/projects/",
   "compression_prompt": "Compress this phrase keeping details, tense, and voice, choosing an ANSI 256 color reflecting its sentiment, output as json {\"color\":\"\",\"text\":\"\"}: {phrase}",
@@ -543,7 +576,7 @@ The `{phrase}` variable is required and will be replaced with the thinking text.
 
 ### Why do some thinking entries show up and others don't?
 
-ccthink only displays content from `MessageContent` blocks with `type: "thinking"`. Regular text messages, tool use blocks, and other content types are filtered out. This is intentional to capture only Claude's reasoning process.
+ccthink displays content from `MessageContent` blocks with `type: "thinking"` and tool use invocations (when `tool_uses` is enabled). Regular text messages and other content types are filtered out. This is intentional to capture Claude's reasoning process and actions.
 
 ### What happens to thinking when I switch conversations?
 
@@ -589,12 +622,13 @@ The original thinking is always preserved and displayed.
 ## How It Works
 
 1. **Monitors** `~/.claude/projects/{project}/` for JSONL conversation files
-2. **Parses** thinking entries from JSONL records (skips non-thinking content)
-3. **Accumulates** multiple entries for 30 seconds or until more thinking arrives
-4. **Optionally compresses** with Sonnet (concurrently, with caching and retry)
-5. **Formats** long lines at natural breakpoints for readability
-6. **Commits** to conversation-specific git branch
-7. **Merges** branches when switching between conversation sessions
+2. **Parses** thinking entries and tool uses from JSONL records
+3. **Displays** items in chronological order as they occur
+4. **Accumulates** multiple entries for 30 seconds or until more thinking arrives
+5. **Optionally compresses** with Sonnet (concurrently, with caching and retry)
+6. **Formats** long lines at natural breakpoints for readability
+7. **Commits** to conversation-specific git branch
+8. **Merges** branches when switching between conversation sessions
 
 ## Requirements
 
