@@ -131,3 +131,79 @@ class TestJsonParsing:
 
             assert result["color"] == "34"
             assert result["text"] == "compressed"
+
+    @pytest.mark.asyncio
+    async def test_json_with_ansi_color_codes_in_values(self) -> None:
+        """Verify ANSI codes are cleaned from JSON values before parsing."""
+        service = CompressPhraseService()
+
+        with patch(
+            "src.features.phrase_transformation.compress_phrase.compress_phrase_service.query"
+        ) as mock_query:
+            # Simulate Claude returning ANSI codes in JSON values
+            ansi_json = '{"color": "\x1b[38;5;209m", "text": "compressed text"}'
+            mock_message = AssistantMessage(
+                content=[TextBlock(text=ansi_json)], model="claude-sonnet-4"
+            )
+
+            async def mock_query_gen(*args: Any, **kwargs: Any) -> AsyncIterator[AssistantMessage]:
+                yield mock_message
+
+            mock_query.return_value = mock_query_gen()
+
+            result = await service.compress("test phrase")
+
+            # ANSI codes should be cleaned, leaving only clean values
+            assert "color" in result
+            assert "\x1b" not in result["color"]
+            assert result["text"] == "compressed text"
+
+    @pytest.mark.asyncio
+    async def test_json_parsing_preserves_clean_int_values(self) -> None:
+        """Verify clean integer color values are preserved correctly."""
+        service = CompressPhraseService()
+
+        with patch(
+            "src.features.phrase_transformation.compress_phrase.compress_phrase_service.query"
+        ) as mock_query:
+            mock_message = AssistantMessage(
+                content=[TextBlock(text='{"color": "42", "text": "compressed"}')],
+                model="claude-sonnet-4",
+            )
+
+            async def mock_query_gen(*args: Any, **kwargs: Any) -> AsyncIterator[AssistantMessage]:
+                yield mock_message
+
+            mock_query.return_value = mock_query_gen()
+
+            result = await service.compress("test phrase")
+
+            # Clean integer strings should parse correctly
+            assert result["color"] == "42"
+            assert result["text"] == "compressed"
+
+    @pytest.mark.asyncio
+    async def test_json_with_multiple_ansi_codes(self) -> None:
+        """Verify multiple ANSI codes throughout response are cleaned."""
+        service = CompressPhraseService()
+
+        with patch(
+            "src.features.phrase_transformation.compress_phrase.compress_phrase_service.query"
+        ) as mock_query:
+            # Multiple ANSI codes in different fields
+            complex_ansi = '{"color": "\x1b[38;5;209m", "text": "\x1b[1mcompressed\x1b[0m"}'
+            mock_message = AssistantMessage(
+                content=[TextBlock(text=complex_ansi)], model="claude-sonnet-4"
+            )
+
+            async def mock_query_gen(*args: Any, **kwargs: Any) -> AsyncIterator[AssistantMessage]:
+                yield mock_message
+
+            mock_query.return_value = mock_query_gen()
+
+            result = await service.compress("test phrase")
+
+            # All ANSI codes should be cleaned
+            assert "\x1b" not in result["color"]
+            assert result["text"] == "compressed"
+            assert "\x1b" not in result["text"]

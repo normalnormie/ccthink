@@ -21,6 +21,26 @@ from src.shared.models import Config
 logger = logging.getLogger(__name__)
 
 
+def safe_int_color(value: str | int, default: int = 37) -> int:
+    """Safely convert color value to integer with fallback.
+
+    Args:
+        value: Color value (may be int, string, or contain ANSI codes).
+        default: Default color code to use if conversion fails.
+
+    Returns:
+        Integer color code.
+    """
+    if isinstance(value, int):
+        return value
+
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        logger.warning("Invalid color value %s, using default %d", value, default)
+        return default
+
+
 def extract_code_blocks(text: str) -> tuple[list[str], list[str]]:
     """Extract code blocks from text, returning compressible and preserved segments.
 
@@ -161,7 +181,7 @@ class TransformThinkingHandler:
 
                 # Apply color to the whole line (use first result's color)
                 if compressed_texts and not has_error and results and isinstance(results[0], dict):
-                    color = int(results[0].get("color", 37))
+                    color = safe_int_color(results[0].get("color", 37))
                 else:
                     color = 37
 
@@ -194,7 +214,7 @@ class TransformThinkingHandler:
                     else:
                         # Success
                         compressed_text = result.get("text", line)
-                        color = int(result.get("color", 37))
+                        color = safe_int_color(result.get("color", 37))
 
                         # Apply color if enabled
                         if command.enable_colors:

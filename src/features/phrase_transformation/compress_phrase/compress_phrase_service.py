@@ -4,6 +4,7 @@
 import asyncio
 import hashlib
 import logging
+import re
 from collections.abc import AsyncIterator
 from typing import Any, cast
 
@@ -15,6 +16,21 @@ from src.shared.models import Config
 from .compression_options import CompressionOptions
 
 logger = logging.getLogger(__name__)
+
+# Regex for ANSI escape sequences (color codes like \x1b[38;5;209m)
+ANSI_ESCAPE_REGEX = re.compile(r'\x1b\[[0-9;]*m')
+
+
+def strip_ansi_codes(text: str) -> str:
+    """Strip ANSI escape codes from text.
+
+    Args:
+        text: Text that may contain ANSI escape sequences.
+
+    Returns:
+        Clean text without ANSI codes.
+    """
+    return ANSI_ESCAPE_REGEX.sub('', text)
 
 
 class CompressPhraseService:
@@ -180,17 +196,21 @@ class CompressPhraseService:
                     if isinstance(block, TextBlock):
                         result_text += block.text
 
+        # Strip ANSI codes before parsing (Claude may return colored output)
+        clean_result = strip_ansi_codes(result_text)
+
         # Parse JSON from result
-        if "```json" in result_text:
-            json_start = result_text.find("{")
-            json_end = result_text.rfind("}") + 1
-            json_str = result_text[json_start:json_end]
+        if "```json" in clean_result:
+            json_start = clean_result.find("{")
+            json_end = clean_result.rfind("}") + 1
+            json_str = clean_result[json_start:json_end]
         else:
-            json_str = result_text.strip()
+            json_str = clean_result.strip()
 
         try:
             return cast("dict[str, str]", orjson.loads(json_str))
         except orjson.JSONDecodeError as e:
+            logger.exception("Failed to parse JSON. Raw: %s", result_text[:200])
             msg = f"Failed to parse JSON: {e}"
             raise ValueError(msg) from e
 
