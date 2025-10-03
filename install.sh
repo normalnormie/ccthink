@@ -85,19 +85,19 @@ esac
 # Check dependencies
 echo ""
 echo "Checking Python dependencies..."
-MISSING_DEPS=()
+MISSING_DEPS=""
 
 # Check each dependency
-for dep in "pydantic" "orjson" "pytest"; do
+for dep in pydantic orjson pytest; do
     if ! $PYTHON_CMD -c "import $dep" 2>/dev/null; then
-        MISSING_DEPS+=("$dep")
+        MISSING_DEPS="$MISSING_DEPS $dep"
     fi
 done
 
-if [ ${#MISSING_DEPS[@]} -eq 0 ]; then
+if [ -z "$MISSING_DEPS" ]; then
     echo -e "${GREEN}✓${NC} All dependencies installed"
 else
-    echo -e "${YELLOW}⚠${NC} Missing dependencies: ${MISSING_DEPS[*]}"
+    echo -e "${YELLOW}⚠${NC} Missing dependencies:$MISSING_DEPS"
     echo ""
     echo "Install dependencies with:"
     echo ""
