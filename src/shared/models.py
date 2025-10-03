@@ -46,9 +46,10 @@ class MessageContent(BaseModel):
     model_config = ConfigDict(
         str_strip_whitespace=True,
         validate_assignment=True,
+        extra="allow",
     )
 
-    type: str = Field(..., description="Content type (e.g., 'thinking', 'text')")
+    type: str = Field(..., description="Content type (e.g., 'thinking', 'text', 'tool_use')")
     thinking: str | None = Field(None, description="Thinking content if type is 'thinking'")
 
 
@@ -215,6 +216,7 @@ class Config(BaseModel):
     sonnet_enabled: bool = Field(default=False, description="Enable Sonnet phrase transformation")
     sonnet_streaming: bool = Field(default=True, description="Enable streaming output for compression")
     sonnet_colors: bool = Field(default=True, description="Enable colored output for compressed phrases")
+    tool_uses: bool = Field(default=True, description="Display tool use calls during monitoring")
     thinking_separator: str = Field(default="\n\n---\n\n", description="Separator between thinking entries in display")
     thinking_line_max_length: int = Field(default=55, description="Maximum line length for thinking output formatting")
     poll_interval_seconds: float = Field(default=1.0, description="Polling interval for JSONL file changes in seconds")

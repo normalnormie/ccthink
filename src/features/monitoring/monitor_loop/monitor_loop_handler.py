@@ -27,6 +27,8 @@ from src.features.git_operations.merge_branch.merge_branch_command import (
 from src.features.git_operations.merge_branch.merge_branch_handler import (
     MergeBranchHandler,
 )
+from src.features.monitoring.display_item.display_item_command import DisplayItemCommand
+from src.features.monitoring.display_item.display_item_handler import DisplayItemHandler
 from src.features.monitoring.find_current_jsonl.find_current_jsonl_command import (
     FindCurrentJsonlCommand,
 )
@@ -45,10 +47,7 @@ from src.features.monitoring.parse_thinking.parse_thinking_command import (
 from src.features.monitoring.parse_thinking.parse_thinking_handler import (
     ParseThinkingHandler,
 )
-from src.features.phrase_transformation.line_formatter.format_thinking_line import (
-    format_colored_thinking_line,
-    format_thinking_line,
-)
+from src.features.phrase_transformation.line_formatter.format_thinking_line import format_thinking_line
 from src.features.phrase_transformation.transform_thinking.transform_thinking_command import (
     TransformThinkingCommand,
 )
@@ -173,7 +172,7 @@ class MonitorLoopHandler:
         return MonitorLoopResponse(config=config, timer_task=command.timer_task)
 
     @staticmethod
-    async def handle(command: MonitorLoopCommand) -> MonitorLoopResponse:  # noqa: C901, PLR0912, PLR0914
+    async def handle(command: MonitorLoopCommand) -> MonitorLoopResponse:  # noqa: PLR0914
         """Execute one monitor loop iteration.
 
         Args:
@@ -210,47 +209,17 @@ class MonitorLoopHandler:
         parse_resp = ParseThinkingHandler.handle(parse_cmd)
         config.last_file_position = parse_resp.end_position
 
-        if not parse_resp.entries:
+        if not parse_resp.entries and not parse_resp.tool_uses:
             SaveConfigHandler.handle(SaveConfigCommand(config=config, config_path=get_config_path()))
-            return MonitorLoopResponse(config=config, timer_task=timer_task)
+            return MonitorLoopResponse(config=config, timer_task=timer_task, should_save_config=False)
 
-        for entry in parse_resp.entries:
-            thinking_content = entry.get_thinking_content()
-            if thinking_content:
-                if MonitorLoopHandler._has_shown_thinking:
-                    if config.verbose:
-                        for sep_line in config.thinking_separator.split("\n"):
-                            logger.info("%s", sep_line)
-                    else:
-                        print(config.thinking_separator, end="" if config.thinking_separator.endswith("\n") else "\n")  # noqa: T201
+        # Display parsed items in chronological order
+        for item in parse_resp.ordered_items:
+            has_thinking = item.thinking_entry is not None and item.thinking_entry.get_thinking_content() is not None
+            show_separator = MonitorLoopHandler._has_shown_thinking and has_thinking
+            await DisplayItemHandler.handle(DisplayItemCommand(item=item, config=config, show_separator=show_separator))
+            if has_thinking:
                 MonitorLoopHandler._has_shown_thinking = True
-
-                if config.sonnet_enabled:
-                    transform_resp = await TransformThinkingHandler.handle(
-                        TransformThinkingCommand(
-                            thinking_lines=[thinking_content],
-                            enable_streaming=config.sonnet_streaming,
-                            enable_colors=config.sonnet_colors
-                        ),
-                        config=command.config
-                    )
-                    for line in transform_resp.transformed_lines:
-                        for formatted_line in format_colored_thinking_line(
-                            line, max_length=config.thinking_line_max_length
-                        ):
-                            if config.verbose:
-                                logger.info("%s", formatted_line)
-                            else:
-                                print(formatted_line)  # noqa: T201
-                    for error in transform_resp.errors:
-                        logger.warning("%s", error)
-                else:
-                    max_len = config.thinking_line_max_length
-                    for formatted_line in format_thinking_line(thinking_content, max_length=max_len):
-                        if config.verbose:
-                            logger.info("%s", formatted_line)
-                        else:
-                            print(formatted_line)  # noqa: T201
 
         if command.enable_git:
             EnsureBranchHandler.handle(

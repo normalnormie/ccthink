@@ -1,5 +1,5 @@
 # ABOUTME: Parse thinking handler implementation
-# ABOUTME: Handles extraction of thinking entries from JSONL file content
+# ABOUTME: Handles extraction of thinking entries and tool uses from JSONL file content
 
 from __future__ import annotations
 
@@ -12,18 +12,36 @@ from src.shared.models import ThinkingEntry
 
 if TYPE_CHECKING:
     from src.features.monitoring.parse_thinking.parse_thinking_command import ParseThinkingCommand
+    from src.shared.tool_use_models import ToolUseEntry
+
+
+@dataclass
+class ParsedItem:
+    """A parsed item that can be either a thinking entry or tool use.
+
+    Attributes:
+        thinking_entry: ThinkingEntry if this is a thinking item, None otherwise.
+        tool_use: ToolUseEntry if this is a tool use item, None otherwise.
+    """
+
+    thinking_entry: ThinkingEntry | None = None
+    tool_use: ToolUseEntry | None = None
 
 
 @dataclass
 class ParseThinkingResponse:
-    """Response from parsing thinking entries.
+    """Response from parsing thinking entries and tool uses.
 
     Attributes:
         entries: List of parsed thinking entries.
+        tool_uses: List of parsed tool use entries.
+        ordered_items: List of parsed items in chronological order.
         end_position: File position after reading (bytes).
     """
 
     entries: list[ThinkingEntry]
+    tool_uses: list[ToolUseEntry]
+    ordered_items: list[ParsedItem]
     end_position: int
 
 
@@ -33,19 +51,59 @@ class ParseThinkingHandler:
     MAX_BUFFER_SIZE = 100 * 1024 * 1024  # 100MB buffer
 
     @staticmethod
+    def _process_assistant_message(
+        entry: ThinkingEntry,
+        entries: list[ThinkingEntry],
+        tool_uses: list[ToolUseEntry],
+        ordered_items: list[ParsedItem],
+    ) -> None:
+        """Process assistant message content to extract thinking and tool uses."""
+        from src.shared.tool_use_models import ToolUseEntry  # noqa: PLC0415
+
+        if not isinstance(entry.message.content, list):
+            return
+
+        thinking_processed = False
+        for content_item in entry.message.content:
+            if content_item.type == "thinking" and content_item.thinking:
+                # Include thinking entry once
+                if not thinking_processed:
+                    entries.append(entry)
+                    ordered_items.append(ParsedItem(thinking_entry=entry))
+                    thinking_processed = True
+            elif content_item.type == "tool_use":
+                # Extract tool use from message content
+                tool_data = {
+                    "type": content_item.type,
+                    "id": getattr(content_item, "id", ""),
+                    "name": getattr(content_item, "name", ""),
+                    "input": getattr(content_item, "input", {}),
+                }
+                tool_use = ToolUseEntry.model_validate(tool_data)
+                tool_uses.append(tool_use)
+                ordered_items.append(ParsedItem(tool_use=tool_use))
+
+    @staticmethod
     def handle(command: ParseThinkingCommand) -> ParseThinkingResponse:
-        """Parse thinking entries from JSONL file.
+        """Parse thinking entries and tool uses from JSONL file.
 
         Args:
             command: Parse thinking command with file path and position.
 
         Returns:
-            Response with parsed entries and end position.
+            Response with parsed entries, tool uses, ordered items, and end position.
         """
+        # Import here to avoid circular dependency at runtime
+        from src.shared.tool_use_models import ToolUseEntry  # noqa: PLC0415
+
         if not command.jsonl_path.exists():
-            return ParseThinkingResponse(entries=[], end_position=command.from_position)
+            return ParseThinkingResponse(
+                entries=[], tool_uses=[], ordered_items=[], end_position=command.from_position
+            )
 
         entries: list[ThinkingEntry] = []
+        tool_uses: list[ToolUseEntry] = []
+        ordered_items: list[ParsedItem] = []
 
         with command.jsonl_path.open("r", encoding="utf-8") as f:
             # Seek to start position
@@ -58,15 +116,26 @@ class ParseThinkingHandler:
 
                 try:
                     data = orjson.loads(stripped_line)
-                    entry = ThinkingEntry.model_validate(data)
 
-                    # Only include assistant entries with thinking content
-                    if entry.type == "assistant" and entry.get_thinking_content():
-                        entries.append(entry)
+                    # Check if this is a standalone tool use entry
+                    if data.get("type") == "tool_use":
+                        tool_use = ToolUseEntry.model_validate(data)
+                        tool_uses.append(tool_use)
+                        ordered_items.append(ParsedItem(tool_use=tool_use))
+                    else:
+                        # Try to parse as thinking entry (assistant message)
+                        entry = ThinkingEntry.model_validate(data)
+                        if entry.type == "assistant":
+                            # Extract tool uses and thinking from message content
+                            ParseThinkingHandler._process_assistant_message(
+                                entry, entries, tool_uses, ordered_items
+                            )
                 except (orjson.JSONDecodeError, ValueError):
                     # Skip malformed lines
                     continue
 
             end_position = f.tell()
 
-        return ParseThinkingResponse(entries=entries, end_position=end_position)
+        return ParseThinkingResponse(
+            entries=entries, tool_uses=tool_uses, ordered_items=ordered_items, end_position=end_position
+        )
