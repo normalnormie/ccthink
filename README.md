@@ -153,7 +153,7 @@ This creates meaningful commits with multiple thinking entries rather than one c
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/ccthink.git
+git clone https://github.com/normalnormie/ccthink.git
 cd ccthink
 
 # Install
@@ -173,7 +173,7 @@ source ~/.bashrc
 
 ```cmd
 REM Clone repository
-git clone https://github.com/yourusername/ccthink.git
+git clone https://github.com/normalnormie/ccthink.git
 cd ccthink
 
 REM Install
