@@ -78,11 +78,10 @@ class TestCompressionMethods:
         """Verify compress_streaming() returns cached result as single chunk."""
         service = CompressPhraseService()
 
-        # Pre-populate cache
+        # Pre-populate cache using public API
         test_phrase = "test phrase"
         cached_result = {"color": "34", "text": "compressed"}
-        cache_key = service._get_cache_key(test_phrase)  # noqa: SLF001
-        service._cache[cache_key] = cached_result  # noqa: SLF001
+        service._cache.put(test_phrase, cached_result)
 
         chunks = [
             chunk async for chunk in service.compress_streaming(test_phrase)

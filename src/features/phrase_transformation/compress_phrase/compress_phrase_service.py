@@ -1,20 +1,19 @@
 # ABOUTME: Service class for compressing phrases using Claude Agent SDK
-# ABOUTME: Handles API calls, caching, retry logic, and error handling for compression
+# ABOUTME: Orchestrates compression, caching, retry logic, and circuit breaker
 
 import asyncio
-import hashlib
 import logging
-import re
 from collections.abc import AsyncIterator
-from typing import Any, cast
+from typing import Any
 
-import orjson
 from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, TextBlock, query
-from json_repair import repair_json
 
 from src.shared.models import Config
 
+from .circuit_breaker import CircuitBreaker
+from .compression_cache import CompressionCache
 from .compression_options import CompressionOptions
+from .json_parser import CompressionJsonParser
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +23,9 @@ class CompressPhraseService:
 
     Authentication is handled automatically by claude_agent_sdk through
     Claude Code's internal configuration (~/.claude.json).
+
+    Uses circuit breaker to prevent infinite retry loops when the Claude Agent
+    SDK subprocess fails repeatedly.
     """
 
     def __init__(
@@ -37,7 +39,8 @@ class CompressPhraseService:
         """
         self._options = options or CompressionOptions()
         self._config = config
-        self._cache: dict[str, dict[str, str]] = {}
+        self._cache = CompressionCache(max_size=self._options.cache_max_size, enabled=self._options.enable_cache)
+        self._circuit_breaker = CircuitBreaker(failure_threshold=3)
 
         # Override compression prompt from config if available
         if config and config.compression_prompt:
@@ -69,58 +72,8 @@ class CompressPhraseService:
 
         return ClaudeAgentOptions(**params)  # pyright: ignore[reportArgumentType]
 
-    @staticmethod
-    def _get_cache_key(phrase: str) -> str:
-        """Generate cache key from phrase.
-
-        Args:
-            phrase: The phrase to generate key for.
-
-        Returns:
-            16-character hash string.
-        """
-        return hashlib.sha256(phrase.encode()).hexdigest()[:16]
-
-    def _get_from_cache(self, phrase: str) -> dict[str, str] | None:
-        """Get cached compression result.
-
-        Args:
-            phrase: The phrase to look up.
-
-        Returns:
-            Cached result dict or None if not found.
-        """
-        if not self._options.enable_cache:
-            return None
-
-        cache_key = self._get_cache_key(phrase)
-        result = self._cache.get(cache_key)
-
-        if result:
-            logger.debug("Cache hit for phrase hash: %s", cache_key)
-
-        return result
-
-    def _add_to_cache(self, phrase: str, result: dict[str, str]) -> None:
-        """Add compression result to cache.
-
-        Args:
-            phrase: The original phrase.
-            result: The compression result.
-        """
-        if not self._options.enable_cache:
-            return
-
-        cache_key = self._get_cache_key(phrase)
-
-        # Maintain cache size limit (FIFO eviction)
-        if len(self._cache) >= self._options.cache_max_size:
-            self._cache.pop(next(iter(self._cache)))
-
-        self._cache[cache_key] = result
-
     async def _compress_with_retry(self, phrase: str) -> dict[str, str]:
-        """Compress phrase with retry logic.
+        """Compress phrase with retry logic and circuit breaker.
 
         Args:
             phrase: The phrase to compress.
@@ -128,19 +81,21 @@ class CompressPhraseService:
         Returns:
             Dict with "color" and "text" keys, or "error" and "raw" on failure.
         """
+        # Check circuit breaker
+        if self._circuit_breaker.is_open:
+            logger.debug("Circuit breaker open - skipping compression")
+            return {"error": "Compression temporarily disabled", "raw": phrase}
+
         last_exception: BaseException | None = None
 
         for attempt in range(self._options.max_retries):
             try:
-                return await self._compress_single(phrase)
-            except (TimeoutError, ValueError, orjson.JSONDecodeError) as e:
+                result = await self._compress_single(phrase)
+                self._circuit_breaker.record_success()
+                return result
+            except Exception as e:  # noqa: BLE001 - Must catch all SDK subprocess errors to prevent infinite loops
                 last_exception = e
-                logger.warning(
-                    "Compression attempt %d/%d failed: %s",
-                    attempt + 1,
-                    self._options.max_retries,
-                    e,
-                )
+                logger.warning("Compression attempt %d/%d failed: %s", attempt + 1, self._options.max_retries, e)
 
                 if attempt < self._options.max_retries - 1:
                     delay = self._options.get_retry_delay(attempt)
@@ -148,48 +103,21 @@ class CompressPhraseService:
                     await asyncio.sleep(delay)
 
         # All retries exhausted
+        self._circuit_breaker.record_failure()
         error_msg = f"Compression failed after {self._options.max_retries} retries"
         logger.error("%s: %s", error_msg, last_exception)
 
-        return {
-            "error": error_msg,
-            "raw": phrase,
-        }
-
-    def _parse_compression_result(self, result_text: str, strip_ansi: bool = False) -> dict[str, str]:
-        """Parse compression result with two-phase JSON parsing and validation.
-        Args:
-            result_text: Raw result text from Claude.
-            strip_ansi: Whether to strip ANSI color codes first.
-        Returns:
-            Dict with "color" and "text" keys.
-        Raises:
-            ValueError: If parsing or validation fails.
-        """
-        # Strip ANSI codes if requested
-        text = re.sub(r'\x1b\[[0-9;]*m', '', result_text) if strip_ansi else result_text
-
-        # Extract JSON from markdown if present
-        json_str = text[text.find("{"):text.rfind("}") + 1] if "```json" in text else text.strip()
-
-        # Two-phase parsing: try orjson first, fall back to json-repair
-        try:
-            parsed = orjson.loads(json_str)
-        except orjson.JSONDecodeError:
-            parsed = repair_json(json_str, return_objects=True)
-
-        # Validate result structure
-        if not isinstance(parsed, dict) or "color" not in parsed or "text" not in parsed:
-            raise ValueError(f"Invalid result structure: {parsed}")
-
-        return cast("dict[str, str]", parsed)
+        return {"error": error_msg, "raw": phrase}
 
     async def _compress_single(self, phrase: str) -> dict[str, str]:
         """Compress single phrase without retry.
+
         Args:
             phrase: The phrase to compress.
+
         Returns:
             Dict with "color" and "text" keys.
+
         Raises:
             ValueError: On JSON parsing failures.
         """
@@ -208,21 +136,24 @@ class CompressPhraseService:
                         result_text += block.text
 
         try:
-            return self._parse_compression_result(result_text, strip_ansi=True)
+            return CompressionJsonParser.parse(result_text, strip_ansi=True)
         except Exception as e:
             logger.exception("JSON parsing failed. Raw: %s", result_text[:200])
-            raise ValueError(f"Failed to parse JSON: {e}") from e
+            msg = f"Failed to parse JSON: {e}"
+            raise ValueError(msg) from e
 
     async def compress(self, phrase: str) -> dict[str, str]:
         """Compress phrase with caching and retry logic.
+
         Args:
             phrase: The phrase to compress.
+
         Returns:
             Dict with "color" and "text" keys on success.
             Dict with "error" and "raw" keys on failure.
         """
         # Check cache first
-        cached = self._get_from_cache(phrase)
+        cached = self._cache.get(phrase)
         if cached:
             return cached
 
@@ -231,7 +162,7 @@ class CompressPhraseService:
 
         # Cache successful results only
         if "error" not in result:
-            self._add_to_cache(phrase, result)
+            self._cache.put(phrase, result)
 
         return result
 
@@ -243,7 +174,7 @@ class CompressPhraseService:
             Chunks of compressed text as they arrive.
         """
         # Check cache first
-        cached = self._get_from_cache(phrase)
+        cached = self._cache.get(phrase)
         if cached:
             # Return cached result as single chunk
             if "text" in cached:
@@ -279,6 +210,6 @@ class CompressPhraseService:
         logger.info("")  # Line break after streaming
 
         try:
-            return self._parse_compression_result(result_text, strip_ansi=False)
-        except Exception as e:
+            return CompressionJsonParser.parse(result_text, strip_ansi=False)
+        except Exception as e:  # noqa: BLE001 - Graceful degradation for all parsing errors
             return {"error": f"Failed to parse JSON: {e}", "raw": result_text}

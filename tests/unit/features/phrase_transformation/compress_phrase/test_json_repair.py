@@ -143,7 +143,7 @@ class TestJsonRepairFunctionality:
         with patch(
             "src.features.phrase_transformation.compress_phrase.compress_phrase_service.query"
         ) as mock_query, patch(
-            "src.features.phrase_transformation.compress_phrase.compress_phrase_service.repair_json"
+            "src.features.phrase_transformation.compress_phrase.json_parser.repair_json"
         ) as mock_repair:
             valid_json = '{"color": "34", "text": "compressed"}'
             mock_message = AssistantMessage(
@@ -168,7 +168,7 @@ class TestJsonRepairFunctionality:
         with patch(
             "src.features.phrase_transformation.compress_phrase.compress_phrase_service.query"
         ) as mock_query, patch(
-            "src.features.phrase_transformation.compress_phrase.compress_phrase_service.repair_json"
+            "src.features.phrase_transformation.compress_phrase.json_parser.repair_json"
         ) as mock_repair:
             invalid_json = '{"color": "34" "text": "compressed"}'
             mock_message = AssistantMessage(

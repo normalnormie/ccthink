@@ -24,11 +24,10 @@ class TestCachingBehavior:
         """Verify cache hit returns cached result without API call."""
         service = CompressPhraseService()
 
-        # Pre-populate cache
+        # Pre-populate cache using public API
         test_phrase = "test phrase"
         cached_result = {"color": "34", "text": "compressed"}
-        cache_key = service._get_cache_key(test_phrase)  # noqa: SLF001
-        service._cache[cache_key] = cached_result  # noqa: SLF001
+        service._cache.put(test_phrase, cached_result)
 
         # Should return cached result without API call
         result = await service.compress(test_phrase)
@@ -81,9 +80,9 @@ class TestCachingBehavior:
             await service.compress(test_phrase)
 
             # Verify result was cached
-            cache_key = service._get_cache_key(test_phrase)  # noqa: SLF001
-            assert cache_key in service._cache  # noqa: SLF001
-            assert service._cache[cache_key] == {"color": "34", "text": "compressed"}  # noqa: SLF001
+            assert test_phrase in service._cache
+            cached = service._cache.get(test_phrase)
+            assert cached == {"color": "34", "text": "compressed"}
 
     @pytest.mark.asyncio
     async def test_error_results_bypass_cache(self) -> None:
@@ -110,8 +109,7 @@ class TestCachingBehavior:
             assert result["raw"] == test_phrase
 
             # Verify result was NOT cached
-            cache_key = service._get_cache_key(test_phrase)  # noqa: SLF001
-            assert cache_key not in service._cache  # noqa: SLF001
+            assert test_phrase not in service._cache
 
     @pytest.mark.asyncio
     async def test_fifo_eviction_at_cache_limit(self) -> None:
@@ -138,21 +136,19 @@ class TestCachingBehavior:
             await service.compress("phrase 3")
 
             # Verify cache is full
-            assert len(service._cache) == 3  # noqa: SLF001
+            assert len(service._cache) == 3
 
             # Compress another phrase - should evict first entry
             await service.compress("phrase 4")
 
             # Verify cache size is still at limit
-            assert len(service._cache) == 3  # noqa: SLF001
+            assert len(service._cache) == 3
 
             # Verify first entry was evicted
-            key1 = service._get_cache_key("phrase 1")  # noqa: SLF001
-            assert key1 not in service._cache  # noqa: SLF001
+            assert "phrase 1" not in service._cache
 
             # Verify last entry is present
-            key4 = service._get_cache_key("phrase 4")  # noqa: SLF001
-            assert key4 in service._cache  # noqa: SLF001
+            assert "phrase 4" in service._cache
 
     @pytest.mark.asyncio
     async def test_caching_disabled_when_option_is_false(self) -> None:
@@ -177,4 +173,4 @@ class TestCachingBehavior:
             await service.compress(test_phrase)
 
             # Verify cache is empty
-            assert len(service._cache) == 0  # noqa: SLF001
+            assert len(service._cache) == 0
