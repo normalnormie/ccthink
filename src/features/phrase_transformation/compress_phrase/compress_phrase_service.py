@@ -10,27 +10,13 @@ from typing import Any, cast
 
 import orjson
 from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, TextBlock, query
+from json_repair import repair_json
 
 from src.shared.models import Config
 
 from .compression_options import CompressionOptions
 
 logger = logging.getLogger(__name__)
-
-# Regex for ANSI escape sequences (color codes like \x1b[38;5;209m)
-ANSI_ESCAPE_REGEX = re.compile(r'\x1b\[[0-9;]*m')
-
-
-def strip_ansi_codes(text: str) -> str:
-    """Strip ANSI escape codes from text.
-
-    Args:
-        text: Text that may contain ANSI escape sequences.
-
-    Returns:
-        Clean text without ANSI codes.
-    """
-    return ANSI_ESCAPE_REGEX.sub('', text)
 
 
 class CompressPhraseService:
@@ -170,15 +156,40 @@ class CompressPhraseService:
             "raw": phrase,
         }
 
-    async def _compress_single(self, phrase: str) -> dict[str, str]:
-        """Compress single phrase without retry.
-
+    def _parse_compression_result(self, result_text: str, strip_ansi: bool = False) -> dict[str, str]:
+        """Parse compression result with two-phase JSON parsing and validation.
         Args:
-            phrase: The phrase to compress.
-
+            result_text: Raw result text from Claude.
+            strip_ansi: Whether to strip ANSI color codes first.
         Returns:
             Dict with "color" and "text" keys.
+        Raises:
+            ValueError: If parsing or validation fails.
+        """
+        # Strip ANSI codes if requested
+        text = re.sub(r'\x1b\[[0-9;]*m', '', result_text) if strip_ansi else result_text
 
+        # Extract JSON from markdown if present
+        json_str = text[text.find("{"):text.rfind("}") + 1] if "```json" in text else text.strip()
+
+        # Two-phase parsing: try orjson first, fall back to json-repair
+        try:
+            parsed = orjson.loads(json_str)
+        except orjson.JSONDecodeError:
+            parsed = repair_json(json_str, return_objects=True)
+
+        # Validate result structure
+        if not isinstance(parsed, dict) or "color" not in parsed or "text" not in parsed:
+            raise ValueError(f"Invalid result structure: {parsed}")
+
+        return cast("dict[str, str]", parsed)
+
+    async def _compress_single(self, phrase: str) -> dict[str, str]:
+        """Compress single phrase without retry.
+        Args:
+            phrase: The phrase to compress.
+        Returns:
+            Dict with "color" and "text" keys.
         Raises:
             ValueError: On JSON parsing failures.
         """
@@ -196,30 +207,16 @@ class CompressPhraseService:
                     if isinstance(block, TextBlock):
                         result_text += block.text
 
-        # Strip ANSI codes before parsing (Claude may return colored output)
-        clean_result = strip_ansi_codes(result_text)
-
-        # Parse JSON from result
-        if "```json" in clean_result:
-            json_start = clean_result.find("{")
-            json_end = clean_result.rfind("}") + 1
-            json_str = clean_result[json_start:json_end]
-        else:
-            json_str = clean_result.strip()
-
         try:
-            return cast("dict[str, str]", orjson.loads(json_str))
-        except orjson.JSONDecodeError as e:
-            logger.exception("Failed to parse JSON. Raw: %s", result_text[:200])
-            msg = f"Failed to parse JSON: {e}"
-            raise ValueError(msg) from e
+            return self._parse_compression_result(result_text, strip_ansi=True)
+        except Exception as e:
+            logger.exception("JSON parsing failed. Raw: %s", result_text[:200])
+            raise ValueError(f"Failed to parse JSON: {e}") from e
 
     async def compress(self, phrase: str) -> dict[str, str]:
         """Compress phrase with caching and retry logic.
-
         Args:
             phrase: The phrase to compress.
-
         Returns:
             Dict with "color" and "text" keys on success.
             Dict with "error" and "raw" keys on failure.
@@ -240,10 +237,8 @@ class CompressPhraseService:
 
     async def compress_streaming(self, phrase: str) -> AsyncIterator[str]:
         """Compress phrase with streaming output.
-
         Args:
             phrase: The phrase to compress.
-
         Yields:
             Chunks of compressed text as they arrive.
         """
@@ -269,12 +264,9 @@ class CompressPhraseService:
 
     async def compress_json(self, phrase: str) -> dict[str, str]:
         """Compress phrase and return parsed JSON result with streaming to logger.
-
         This method logs streaming output and returns parsed result.
-
         Args:
             phrase: The phrase to compress.
-
         Returns:
             Dictionary with 'color' and 'text' keys, or 'error' and 'raw' on failure.
         """
@@ -286,15 +278,7 @@ class CompressPhraseService:
 
         logger.info("")  # Line break after streaming
 
-        # Parse JSON from result
         try:
-            if "```json" in result_text:
-                json_start = result_text.find("{")
-                json_end = result_text.rfind("}") + 1
-                json_str = result_text[json_start:json_end]
-            else:
-                json_str = result_text.strip()
-
-            return cast("dict[str, str]", orjson.loads(json_str))
-        except orjson.JSONDecodeError as e:
+            return self._parse_compression_result(result_text, strip_ansi=False)
+        except Exception as e:
             return {"error": f"Failed to parse JSON: {e}", "raw": result_text}
