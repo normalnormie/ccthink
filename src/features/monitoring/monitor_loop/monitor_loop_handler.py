@@ -118,17 +118,9 @@ class MonitorLoopHandler:
             SaveConfigHandler.handle(SaveConfigCommand(config=config, config_path=get_config_path()))
             return MonitorLoopResponse(config=config, timer_task=command.timer_task)
 
-        thinking = config.accumulated_thinking
-        # Apply sonnet transformation if enabled
-        if config.sonnet_enabled:
-            resp = await TransformThinkingHandler.handle(
-                TransformThinkingCommand(thinking_lines=thinking, enable_streaming=False, enable_colors=False),
-                config=config
-            )
-            thinking = list(resp.transformed_lines)
-        # Format each entry and join entries with separator
+        # Content already compressed (if sonnet enabled), just strip ANSI for commit
         formatted_entries = []
-        for line in thinking:
+        for line in config.accumulated_thinking:
             formatted_lines = format_thinking_line(line, max_length=config.line_max_length)
             formatted_entries.append("\n".join(formatted_lines))
         content = "\n\n---\n\n".join(formatted_entries)
@@ -222,20 +214,41 @@ class MonitorLoopHandler:
             SaveConfigHandler.handle(SaveConfigCommand(config=config, config_path=get_config_path()))
             return MonitorLoopResponse(config=config, timer_task=timer_task, should_save_config=False)
 
-        # Display parsed items in chronological order
+        # Compress all entries once if sonnet enabled
+        compressed_map: dict[str, str] = {}
+        if config.sonnet_enabled:
+            for entry in parse_resp.entries:
+                thinking = config.thinking_enabled and entry.get_thinking_content()
+                content = thinking or (config.text_enabled and entry.get_text_content())
+                if content:
+                    cmd = TransformThinkingCommand(
+                        thinking_lines=[content],
+                        enable_streaming=config.sonnet_streaming,
+                        enable_colors=config.sonnet_colors,
+                    )
+                    resp = await TransformThinkingHandler.handle(cmd, config=config)
+                    if resp.transformed_lines:
+                        compressed_map[entry.parent_uuid] = resp.transformed_lines[0]
+
+        # Display parsed items
         for item in parse_resp.ordered_items:
             has_thinking = item.thinking_entry is not None and item.thinking_entry.get_thinking_content() is not None
             show_separator = MonitorLoopHandler._has_shown_thinking and has_thinking
-            await DisplayItemHandler.handle(DisplayItemCommand(item=item, config=config, show_separator=show_separator))
+            compressed = compressed_map.get(item.thinking_entry.parent_uuid) if item.thinking_entry else None
+            await DisplayItemHandler.handle(
+                DisplayItemCommand(
+                    item=item, config=config, show_separator=show_separator, compressed_content=compressed
+                )
+            )
             if has_thinking:
                 MonitorLoopHandler._has_shown_thinking = True
 
         if command.enable_git:
-            EnsureBranchHandler.handle(
-                EnsureBranchCommand(branch_name=find_resp.jsonl_path.stem)
-            )
+            EnsureBranchHandler.handle(EnsureBranchCommand(branch_name=find_resp.jsonl_path.stem))
 
-        proc_resp = ProcessThinkingHandler.handle(ProcessThinkingCommand(entries=parse_resp.entries, config=config))
+        proc_resp = ProcessThinkingHandler.handle(
+            ProcessThinkingCommand(entries=parse_resp.entries, config=config, compressed_map=compressed_map)
+        )
         config = proc_resp.current_config
 
         if proc_resp.should_commit:
@@ -246,21 +259,10 @@ class MonitorLoopHandler:
                     timer_task.cancel()
                     timer_task = None
             else:
-                thinking_to_commit = proc_resp.thinking_to_commit
-
-                if config.sonnet_enabled:
-                    transform_cmd = TransformThinkingCommand(
-                        thinking_lines=thinking_to_commit,
-                        enable_streaming=False,
-                        enable_colors=False,
-                    )
-                    transform_resp = await TransformThinkingHandler.handle(transform_cmd, config=command.config)
-                    thinking_to_commit = list(transform_resp.transformed_lines)
-
-                # Format each entry and join entries with separator
+                # Content is already compressed (if sonnet enabled), just strip ANSI for commit
                 formatted_entries = [
                     "\n".join(format_thinking_line(line, max_length=config.line_max_length))
-                    for line in thinking_to_commit
+                    for line in proc_resp.thinking_to_commit
                 ]
                 content = "\n\n---\n\n".join(formatted_entries)
                 if command.enable_git:

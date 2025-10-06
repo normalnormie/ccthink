@@ -72,15 +72,23 @@ class DisplayItemHandler:
 
         # Display with Sonnet transformation if enabled
         if config.sonnet_enabled:
-            transform_resp = await TransformThinkingHandler.handle(
-                TransformThinkingCommand(
-                    thinking_lines=[content],
-                    enable_streaming=config.sonnet_streaming,
-                    enable_colors=config.sonnet_colors,
-                ),
-                config=config,
-            )
-            for line in transform_resp.transformed_lines:
+            # Use pre-compressed content if available, otherwise compress now
+            if command.compressed_content:
+                transformed_lines = [command.compressed_content]
+                errors = []
+            else:
+                transform_resp = await TransformThinkingHandler.handle(
+                    TransformThinkingCommand(
+                        thinking_lines=[content],
+                        enable_streaming=config.sonnet_streaming,
+                        enable_colors=config.sonnet_colors,
+                    ),
+                    config=config,
+                )
+                transformed_lines = transform_resp.transformed_lines
+                errors = transform_resp.errors
+
+            for line in transformed_lines:
                 for formatted_line in format_colored_thinking_line(
                     line, max_length=config.line_max_length
                 ):
@@ -88,7 +96,7 @@ class DisplayItemHandler:
                         logger.info("%s", formatted_line)
                     else:
                         print(formatted_line)  # noqa: T201
-            for error in transform_resp.errors:
+            for error in errors:
                 logger.warning("%s", error)
         else:
             # Display without transformation

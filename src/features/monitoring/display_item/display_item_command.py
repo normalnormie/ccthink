@@ -19,8 +19,10 @@ class DisplayItemCommand:
         item: The parsed item to display (thinking entry or tool use).
         config: Application configuration.
         show_separator: Whether to show separator before this item.
+        compressed_content: Pre-compressed content if already compressed.
     """
 
     item: ParsedItem
     config: Config
     show_separator: bool
+    compressed_content: str | None = None
