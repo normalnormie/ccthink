@@ -59,7 +59,9 @@ src/
     ├── gitignore/                # .gitignore management
     ├── monitoring/
     │   ├── find_current_jsonl/   # JSONL file discovery
-    │   ├── parse_thinking/       # JSONL parsing
+    │   ├── parse_thinking/       # JSONL parsing (thinking and text)
+    │   ├── display_item/         # Content display handler
+    │   ├── compress_entries/     # Batch compression for entries
     │   └── monitor_loop/         # Main monitoring cycle
     ├── phrase_transformation/
     │   ├── transform_thinking/   # Sonnet compression
@@ -120,6 +122,8 @@ class Config(BaseModel):
     sonnet_enabled: bool
     sonnet_streaming: bool
     sonnet_colors: bool
+    thinking_enabled: bool
+    text_enabled: bool
 
     # Configuration
     poll_interval_seconds: float
@@ -141,6 +145,9 @@ class ThinkingEntry(BaseModel):
 
     def get_thinking_content(self) -> str | None:
         # Extract thinking from message content
+
+    def get_text_content(self) -> str | None:
+        # Extract text from message content
 ```
 
 #### Message & MessageContent
@@ -151,6 +158,7 @@ Nested structure for conversation messages:
 class MessageContent(BaseModel):
     type: str  # "thinking", "text", etc.
     thinking: str | None
+    text: str | None
 
 class Message(BaseModel):
     role: str  # "assistant", "user"
@@ -212,10 +220,11 @@ stateDiagram-v2
 When switching between conversation files (JSONL):
 
 1. **Detect Switch**: Compare current file to monitored file
-2. **Commit Pending**: If waiting, commit accumulated thinking
-3. **Merge Branch**: Merge previous conversation branch to main
-4. **Reset State**: Clear accumulation, reset file position
-5. **Restart Monitoring**: Begin monitoring current file
+2. **Commit Pending**: If waiting, commit accumulated content
+3. **Ensure Gitignore**: Verify ccthink.conf is in .gitignore
+4. **Merge Branch**: Merge previous conversation branch to main
+5. **Reset State**: Clear accumulation, reset file position
+6. **Restart Monitoring**: Begin monitoring current file
 
 ### Phrase Transformation Pipeline
 
@@ -223,17 +232,21 @@ When Sonnet compression is enabled:
 
 ```mermaid
 graph LR
-    A[Raw Thinking Text] --> B[Transform Command]
-    B --> C[Claude Agent SDK]
-    C --> D{Parse Response}
-    D -->|Success| E[Compressed + Color]
-    D -->|Failure| F[Fallback to Original]
-    E --> G{Colors Enabled?}
-    G -->|Yes| H[Apply ANSI Codes]
-    G -->|No| I[Plain Text]
-    F --> I
-    H --> J[Display/Commit]
-    I --> J
+    A[Raw Content] --> B[Extract Thinking & Text]
+    B --> C[Batch Compress All Entries]
+    C --> D[Transform Each Type]
+    D --> E[Claude Agent SDK]
+    E --> F{Parse Response}
+    F -->|Success| G[Compressed + Color]
+    F -->|Failure| H[Fallback to Original]
+    G --> I{Colors Enabled?}
+    I -->|Yes| J[Apply ANSI Codes]
+    I -->|No| K[Plain Text]
+    H --> K
+    J --> L[Store in Maps by UUID]
+    K --> L
+    L --> M[Display with Pre-compressed]
+    L --> N[Commit Plain Text]
 ```
 
 ## State Management
@@ -267,13 +280,13 @@ This approach avoids re-parsing the entire file on each poll.
 
 UUIDs (`parent_uuid`) identify conversation turns:
 
-- `last_processed_uuid`: Last thinking entry successfully committed
+- `last_processed_uuid`: Last content entry successfully committed
 - `waiting_target_uuid`: Target UUID when accumulation completes
 
 UUIDs ensure:
 
 - No duplicate commits
-- Correct ordering of thinking entries
+- Correct ordering of content entries
 - Recovery after restarts
 
 ## Error Handling Strategy
@@ -296,9 +309,9 @@ except ParseError:
 
 # Transform failure → Use original text
 try:
-    compressed = transform(thinking)
+    compressed = transform(content)
 except TransformError:
-    compressed = thinking
+    compressed = content
 ```
 
 ### Git Operation Safety
@@ -320,7 +333,13 @@ if "nothing to commit" in result.stdout.lower():
 
 ### Merge Conflict Handling
 
-Two strategies for merge conflicts:
+Main branch validation on startup:
+
+- Checks if configured `main_branch` exists in git repository
+- Warns if branch doesn't exist
+- Suggests alternatives if common branches (main/master) are confused
+
+Merge conflict strategies:
 
 1. **Quit Mode** (`quit_on_conflict=True`): Exit immediately
 2. **Continue Mode** (`quit_on_conflict=False`): Log error, continue monitoring

@@ -6,10 +6,11 @@ The `src/` directory contains the core implementation of **ccthink** ("ultrathin
 
 ## Features
 
-- **Real-time JSONL Monitoring**: Watches Claude project conversation files for incoming thinking content
-- **Smart Accumulation**: Batches multiple thinking entries before committing to reduce noise
+- **Real-time JSONL Monitoring**: Watches Claude project conversation files for incoming content
+- **Dual Content Type Support**: Extracts and processes both thinking and text content independently
+- **Smart Accumulation**: Batches multiple entries before committing to reduce noise
 - **AI-Powered Compression**: Optional Sonnet-based phrase transformation with colored terminal output
-- **Git Integration**: Automatic branch management and commits for each conversation session
+- **Git Integration**: Automatic branch management, validation, and commits for each conversation session
 - **Persistent State**: Tracks file positions, UUIDs, and configuration across sessions
 - **Cross-Platform**: Works on Linux, macOS, and Windows
 
@@ -44,12 +45,19 @@ Configuration is stored per-project in `ccthink.conf` and globally in `~/.config
   "sonnet_enabled": false,
   "sonnet_streaming": false,
   "sonnet_colors": false,
+  "thinking_enabled": true,
+  "text_enabled": false,
   "poll_interval_seconds": 1.0,
   "line_max_length": 55,
   "separator": "\n\n---\n\n",
   "main_branch": "master"
 }
 ```
+
+Content type controls:
+
+- `thinking_enabled`: Extract and process thinking content (default: true)
+- `text_enabled`: Extract and process text content (default: false)
 
 ### CLI Flags
 
@@ -100,22 +108,27 @@ Core dependencies managed in `requirements.txt`:
 
 **Process**:
 
-1. Find current JSONL file in Claude project directory
-2. Detect file switches and bring previous branches into main
-3. Parse thinking entries from file position
-4. Display thinking (with optional compression)
-5. Process accumulation logic
-6. Commit if threshold reached
+1. Validate main branch exists in git repository
+2. Find current JSONL file in Claude project directory
+3. Detect file switches and bring previous branches into main
+4. Parse thinking and text entries from file position
+5. Compress all entries if Sonnet is enabled (both content types separately)
+6. Display content with pre-compressed results
+7. Process accumulation logic
+8. Commit if threshold reached (strips ANSI codes from commit messages)
 
 #### ProcessThinkingHandler
 
-**Purpose**: Implements thinking accumulation logic
+**Purpose**: Implements content accumulation logic for both thinking and text entries
 
 **Logic**:
 
-- **First thinking**: Start waiting, accumulate
-- **Additional thinking while waiting**: Commit accumulated + first additional entry
+- **First content entry**: Start waiting, accumulate
+- **Additional content while waiting**: Commit accumulated + first additional entry
 - **Timeout reached**: Commit accumulated entries
+- **Both content types disabled**: Skip commit and clear accumulation state
+
+**Input**: Accepts pre-compressed content maps to avoid double compression
 
 **Returns**: Decision on whether to commit and what content to commit
 
@@ -148,6 +161,25 @@ Core dependencies managed in `requirements.txt`:
 
 **Output**: Compressed phrases with optional color formatting
 
+#### CompressEntriesHandler
+
+**Purpose**: Compress both thinking and text content from multiple entries
+
+**Parameters**:
+
+- `entries`: List of thinking entries to process
+- `config`: Application configuration with content type toggles
+
+**Process**:
+
+1. Loop through all entries
+2. Extract thinking content if `thinking_enabled` is true
+3. Extract text content if `text_enabled` is true
+4. Compress each content type separately using Sonnet transformation
+5. Return separate maps for compressed thinking and text content
+
+**Returns**: Compressed content maps keyed by entry parent_uuid
+
 #### ColoredFormatter
 
 **Purpose**: Apply ANSI 256 terminal colors to text
@@ -167,9 +199,10 @@ Core dependencies managed in `requirements.txt`:
 
 ### Feature Modules
 
-- **`features/monitoring/`**: JSONL file monitoring and parsing
-- **`features/processing/`**: Thinking accumulation and commit logic
-- **`features/git_operations/`**: Branch management and commits
+- **`features/monitoring/`**: JSONL file monitoring, parsing, display, and compression
+- **`features/processing/`**: Content accumulation and commit logic
+- **`features/git_operations/`**: Branch management, validation, and commits
+- **`features/gitignore/`**: .gitignore file management
 - **`features/phrase_transformation/`**: Sonnet compression and formatting
 - **`features/config/`**: Configuration loading and persistence
 - **`features/cli/`**: Argument parsing
@@ -194,10 +227,15 @@ src/
     ├── cli/                      # CLI argument parsing
     ├── config/                   # Configuration management
     ├── git_operations/           # Git branch and commit operations
-    ├── gitignore/               # .gitignore management
-    ├── monitoring/              # JSONL monitoring and parsing
-    ├── phrase_transformation/   # Sonnet compression
-    └── processing/              # Thinking accumulation logic
+    ├── gitignore/                # .gitignore management
+    ├── monitoring/               # JSONL monitoring, parsing, display, compression
+    │   ├── find_current_jsonl/   # Current file discovery
+    │   ├── parse_thinking/       # JSONL parsing
+    │   ├── display_item/         # Content display
+    │   ├── compress_entries/     # Batch content compression
+    │   └── monitor_loop/         # Main loop orchestration
+    ├── phrase_transformation/    # Sonnet compression
+    └── processing/               # Content accumulation logic
 ```
 
 Each feature follows a consistent structure:
@@ -210,18 +248,22 @@ Each feature follows a consistent structure:
 
 ### Monitoring Flow
 
-1. **Find Current File**: Locate the most current JSONL file in `~/.claude/projects/{project-name}/`
-2. **Read Content**: Read from last known file position to end
-3. **Parse Entries**: Extract thinking entries from JSONL records
-4. **Display Thinking**: Show thinking content (optionally compressed)
-5. **Accumulate**: Add to waiting list if first entry, or commit if additional entry
-6. **Commit**: Create git commit when threshold reached
-7. **Update State**: Save file position, UUID, and config
+1. **Validate Branch**: Verify configured main branch exists in git repository
+2. **Find Current File**: Locate the most current JSONL file in `~/.claude/projects/{project-name}/`
+3. **Read Content**: Read from last known file position to end
+4. **Parse Entries**: Extract thinking and text entries from JSONL records (controlled by content type toggles)
+5. **Compress Content**: If Sonnet enabled, compress all entries (thinking and text separately)
+6. **Display Content**: Show content with pre-compressed results
+7. **Accumulate**: Add to waiting list if first entry, or commit if additional entry
+8. **Commit**: Create git commit when threshold reached (plain text without ANSI codes)
+9. **Update State**: Save file position, UUID, and config
 
 ### Git Branch Strategy
 
+- Main branch is validated on startup (warns if configured branch doesn't exist)
 - Each JSONL file (conversation) gets its own branch named by file stem
 - Branches are created automatically on first thinking entry
+- .gitignore is ensured to contain ccthink.conf before any merge or commit
 - When switching to a different conversation, previous branch is merged into main # noqm
 - All commits happen on conversation-specific branches
 
@@ -229,29 +271,32 @@ Each feature follows a consistent structure:
 
 Persistent state tracked in configuration:
 
-- `last_processed_uuid`: Last thinking entry committed
+- `last_processed_uuid`: Last content entry committed
 - `last_file_position`: Byte position in JSONL file
 - `monitored_file`: Currently watched file path
 - `waiting_for_thinking`: Currently accumulating entries
-- `accumulated_thinking`: Entries waiting to be committed
+- `accumulated_thinking`: Content entries (thinking or text) waiting to be committed
 - `waiting_target_uuid`: Target UUID for next commit
 
 ### Phrase Transformation Pipeline
 
 When Sonnet is enabled:
 
-1. **Extract Thinking**: Parse thinking content from JSONL
-2. **Transform**: Send to Claude Agent SDK with compression prompt
-3. **Parse Response**: Extract compressed phrase and color from JSON response
-4. **Format**: Apply ANSI color codes if colors enabled
-5. **Display/Commit**: Show formatted output or commit plain text
+1. **Extract Content**: Parse thinking and text content from JSONL (controlled by content type toggles)
+2. **Batch Compress**: Send all entries to CompressEntriesHandler for parallel compression
+3. **Transform**: Each content type sent to Claude Agent SDK with compression prompt
+4. **Parse Response**: Extract compressed phrase and color from JSON response
+5. **Format**: Apply ANSI color codes if colors enabled
+6. **Cache Results**: Store compressed content maps keyed by parent_uuid
+7. **Display/Commit**: Show formatted output with pre-compressed content, commit plain text
 
 ## Error Handling
 
 - **File Not Found**: Gracefully handles missing JSONL files (waits for next poll)
+- **Branch Validation**: Warns if configured main branch doesn't exist, suggests alternatives
 - **Merge Conflicts**: Optionally quits on conflict or continues with manual resolution
 - **Git Errors**: Logs errors but continues monitoring
-- **Transform Failures**: Falls back to original thinking text
+- **Transform Failures**: Falls back to original content text
 - **Parse Errors**: Skips malformed JSONL entries and continues
 
 ## Performance Considerations
