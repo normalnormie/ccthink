@@ -47,7 +47,10 @@ from src.features.monitoring.parse_thinking.parse_thinking_command import (
 from src.features.monitoring.parse_thinking.parse_thinking_handler import (
     ParseThinkingHandler,
 )
-from src.features.phrase_transformation.line_formatter.format_thinking_line import format_thinking_line
+from src.features.phrase_transformation.line_formatter.format_thinking_line import (
+    format_thinking_line,
+    strip_ansi_codes,
+)
 from src.features.phrase_transformation.transform_thinking.transform_thinking_command import (
     TransformThinkingCommand,
 )
@@ -118,10 +121,11 @@ class MonitorLoopHandler:
             SaveConfigHandler.handle(SaveConfigCommand(config=config, config_path=get_config_path()))
             return MonitorLoopResponse(config=config, timer_task=command.timer_task)
 
-        # Content already compressed (if sonnet enabled), just strip ANSI for commit
+        # Content already compressed (if sonnet enabled), strip ANSI codes for commit
         formatted_entries = []
         for line in config.accumulated_thinking:
-            formatted_lines = format_thinking_line(line, max_length=config.line_max_length)
+            clean_line = strip_ansi_codes(line)
+            formatted_lines = format_thinking_line(clean_line, max_length=config.line_max_length)
             formatted_entries.append("\n".join(formatted_lines))
         content = "\n\n---\n\n".join(formatted_entries)
 
@@ -259,9 +263,9 @@ class MonitorLoopHandler:
                     timer_task.cancel()
                     timer_task = None
             else:
-                # Content is already compressed (if sonnet enabled), just strip ANSI for commit
+                # Content is already compressed (if sonnet enabled), strip ANSI codes for commit
                 formatted_entries = [
-                    "\n".join(format_thinking_line(line, max_length=config.line_max_length))
+                    "\n".join(format_thinking_line(strip_ansi_codes(line), max_length=config.line_max_length))
                     for line in proc_resp.thinking_to_commit
                 ]
                 content = "\n\n---\n\n".join(formatted_entries)
