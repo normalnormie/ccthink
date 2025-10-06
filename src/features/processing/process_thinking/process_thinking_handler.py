@@ -52,35 +52,38 @@ class ProcessThinkingHandler:
         """
         config = command.config
 
-        # Extract thinking and text content from entries
-        # Use compressed content if available, otherwise use raw
-        content_items = []
+        # Extract content from each entry
+        # Each entry may produce multiple content items (thinking + text)
+        content_items_with_entries = []
         for entry in command.entries:
-            # Try to use pre-compressed thinking content first
+            entry_contents = []
+
+            # Extract thinking content
             if config.thinking_enabled:
                 if command.compressed_thinking_map and entry.parent_uuid in command.compressed_thinking_map:
-                    content_items.append(command.compressed_thinking_map[entry.parent_uuid])
+                    entry_contents.append(command.compressed_thinking_map[entry.parent_uuid])
                 else:
-                    # Fall back to raw thinking content
                     thinking = entry.get_thinking_content()
                     if thinking:
-                        content_items.append(thinking)
+                        entry_contents.append(thinking)
 
-            # Try to use pre-compressed text content
+            # Extract text content
             if config.text_enabled:
                 if command.compressed_text_map and entry.parent_uuid in command.compressed_text_map:
-                    content_items.append(command.compressed_text_map[entry.parent_uuid])
+                    entry_contents.append(command.compressed_text_map[entry.parent_uuid])
                 else:
-                    # Fall back to raw text content
                     text = entry.get_text_content()
                     if text:
-                        content_items.append(text)
+                        entry_contents.append(text)
+
+            # Add all content from this entry
+            content_items_with_entries.extend(entry_contents)
 
         if not config.waiting_for_thinking:
             # Not waiting - start waiting if we have content
-            if content_items:
+            if content_items_with_entries:
                 config.waiting_for_thinking = True
-                config.accumulated_thinking = content_items
+                config.accumulated_thinking = content_items_with_entries
                 config.waiting_target_uuid = command.entries[-1].parent_uuid
 
                 return ProcessThinkingResponse(
@@ -101,12 +104,10 @@ class ProcessThinkingHandler:
             )
 
         # Currently waiting - check for additional content
-        total_content = len(config.accumulated_thinking) + len(content_items)
-
-        if total_content > len(config.accumulated_thinking):
-            # Have additional content - commit accumulated + first additional
-            to_commit = [*config.accumulated_thinking, content_items[0]]
-            target_uuid = command.entries[0].parent_uuid
+        if content_items_with_entries:
+            # Have additional content - commit accumulated + current batch
+            to_commit = [*config.accumulated_thinking, *content_items_with_entries]
+            target_uuid = command.entries[-1].parent_uuid
 
             # Reset waiting state
             config.waiting_for_thinking = False
