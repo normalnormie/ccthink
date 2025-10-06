@@ -19,6 +19,7 @@ from src.features.phrase_transformation.transform_thinking.transform_thinking_ha
 
 if TYPE_CHECKING:
     from src.features.monitoring.display_item.display_item_command import DisplayItemCommand
+    from src.shared.models import Config
 
 logger = logging.getLogger(__name__)
 
@@ -49,18 +50,6 @@ class DisplayItemHandler:
         if not item.thinking_entry:
             return
 
-        # Try to get thinking content if enabled
-        content = None
-        if config.thinking_enabled:
-            content = item.thinking_entry.get_thinking_content()
-
-        # Try to get text content if enabled and no thinking found
-        if not content and config.text_enabled:
-            content = item.thinking_entry.get_text_content()
-
-        if not content:
-            return
-
         # Show separator if requested
         if command.show_separator:
             if config.verbose:
@@ -70,11 +59,44 @@ class DisplayItemHandler:
                 separator_end = "" if config.separator.endswith("\n") else "\n"
                 print(config.separator, end=separator_end)  # noqa: T201
 
+        # Display thinking content if enabled
+        if config.thinking_enabled:
+            thinking_content = item.thinking_entry.get_thinking_content()
+            if thinking_content:
+                await DisplayItemHandler._display_content(
+                    content=thinking_content,
+                    compressed_content=command.compressed_thinking,
+                    config=config,
+                )
+
+        # Display text content if enabled
+        if config.text_enabled:
+            text_content = item.thinking_entry.get_text_content()
+            if text_content:
+                await DisplayItemHandler._display_content(
+                    content=text_content,
+                    compressed_content=command.compressed_text,
+                    config=config,
+                )
+
+    @staticmethod
+    async def _display_content(
+        content: str,
+        compressed_content: str | None,
+        config: Config,
+    ) -> None:
+        """Display content with optional Sonnet transformation.
+
+        Args:
+            content: Raw content to display.
+            compressed_content: Pre-compressed content if available.
+            config: Application configuration.
+        """
         # Display with Sonnet transformation if enabled
         if config.sonnet_enabled:
             # Use pre-compressed content if available, otherwise compress now
-            if command.compressed_content:
-                transformed_lines = [command.compressed_content]
+            if compressed_content:
+                transformed_lines = [compressed_content]
                 errors = []
             else:
                 transform_resp = await TransformThinkingHandler.handle(

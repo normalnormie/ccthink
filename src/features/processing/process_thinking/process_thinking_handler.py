@@ -56,16 +56,22 @@ class ProcessThinkingHandler:
         # Use compressed content if available, otherwise use raw
         content_items = []
         for entry in command.entries:
-            # Try to use pre-compressed content first
-            if command.compressed_map and entry.parent_uuid in command.compressed_map:
-                content_items.append(command.compressed_map[entry.parent_uuid])
-            else:
-                # Fall back to raw content
-                if config.thinking_enabled:
+            # Try to use pre-compressed thinking content first
+            if config.thinking_enabled:
+                if command.compressed_thinking_map and entry.parent_uuid in command.compressed_thinking_map:
+                    content_items.append(command.compressed_thinking_map[entry.parent_uuid])
+                else:
+                    # Fall back to raw thinking content
                     thinking = entry.get_thinking_content()
                     if thinking:
                         content_items.append(thinking)
-                if config.text_enabled:
+
+            # Try to use pre-compressed text content
+            if config.text_enabled:
+                if command.compressed_text_map and entry.parent_uuid in command.compressed_text_map:
+                    content_items.append(command.compressed_text_map[entry.parent_uuid])
+                else:
+                    # Fall back to raw text content
                     text = entry.get_text_content()
                     if text:
                         content_items.append(text)

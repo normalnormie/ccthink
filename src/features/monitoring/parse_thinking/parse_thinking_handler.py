@@ -75,21 +75,20 @@ class ParseThinkingHandler:
         if not isinstance(entry.message.content, list):
             return
 
-        thinking_processed = False
-        text_processed = False
+        entry_added = False
         for content_item in entry.message.content:
             if content_item.type == "thinking" and content_item.thinking and thinking_enabled:
                 # Include thinking entry once
-                if not thinking_processed:
+                if not entry_added:
                     entries.append(entry)
                     ordered_items.append(ParsedItem(thinking_entry=entry))
-                    thinking_processed = True
+                    entry_added = True
             elif content_item.type == "text" and content_item.text and text_enabled:
                 # Include text entry once
-                if not text_processed:
+                if not entry_added:
                     entries.append(entry)
                     ordered_items.append(ParsedItem(thinking_entry=entry))
-                    text_processed = True
+                    entry_added = True
             elif content_item.type == "tool_use":
                 # Extract tool use from message content
                 tool_data = {

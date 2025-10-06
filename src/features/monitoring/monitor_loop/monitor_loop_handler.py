@@ -27,6 +27,12 @@ from src.features.git_operations.merge_branch.merge_branch_command import (
 from src.features.git_operations.merge_branch.merge_branch_handler import (
     MergeBranchHandler,
 )
+from src.features.monitoring.compress_entries.compress_entries_command import (
+    CompressEntriesCommand,
+)
+from src.features.monitoring.compress_entries.compress_entries_handler import (
+    CompressEntriesHandler,
+)
 from src.features.monitoring.display_item.display_item_command import DisplayItemCommand
 from src.features.monitoring.display_item.display_item_handler import DisplayItemHandler
 from src.features.monitoring.find_current_jsonl.find_current_jsonl_command import (
@@ -50,12 +56,6 @@ from src.features.monitoring.parse_thinking.parse_thinking_handler import (
 from src.features.phrase_transformation.line_formatter.format_thinking_line import (
     format_thinking_line,
     strip_ansi_codes,
-)
-from src.features.phrase_transformation.transform_thinking.transform_thinking_command import (
-    TransformThinkingCommand,
-)
-from src.features.phrase_transformation.transform_thinking.transform_thinking_handler import (
-    TransformThinkingHandler,
 )
 from src.features.processing.process_thinking.process_thinking_command import (
     ProcessThinkingCommand,
@@ -218,30 +218,34 @@ class MonitorLoopHandler:
             SaveConfigHandler.handle(SaveConfigCommand(config=config, config_path=get_config_path()))
             return MonitorLoopResponse(config=config, timer_task=timer_task, should_save_config=False)
 
-        # Compress all entries once if sonnet enabled
-        compressed_map: dict[str, str] = {}
+        # Compress all entries once if sonnet enabled (both thinking and text separately)
+        compressed_thinking_map: dict[str, str] = {}
+        compressed_text_map: dict[str, str] = {}
         if config.sonnet_enabled:
-            for entry in parse_resp.entries:
-                thinking = config.thinking_enabled and entry.get_thinking_content()
-                content = thinking or (config.text_enabled and entry.get_text_content())
-                if content:
-                    cmd = TransformThinkingCommand(
-                        thinking_lines=[content],
-                        enable_streaming=config.sonnet_streaming,
-                        enable_colors=config.sonnet_colors,
-                    )
-                    resp = await TransformThinkingHandler.handle(cmd, config=config)
-                    if resp.transformed_lines:
-                        compressed_map[entry.parent_uuid] = resp.transformed_lines[0]
+            compress_cmd = CompressEntriesCommand(entries=parse_resp.entries, config=config)
+            compress_resp = await CompressEntriesHandler.handle(compress_cmd)
+            compressed_thinking_map = compress_resp.compressed_thinking_map
+            compressed_text_map = compress_resp.compressed_text_map
 
         # Display parsed items
         for item in parse_resp.ordered_items:
             has_thinking = item.thinking_entry is not None and item.thinking_entry.get_thinking_content() is not None
             show_separator = MonitorLoopHandler._has_shown_thinking and has_thinking
-            compressed = compressed_map.get(item.thinking_entry.parent_uuid) if item.thinking_entry else None
+
+            # Get compressed content for this entry
+            compressed_thinking = None
+            compressed_text = None
+            if item.thinking_entry:
+                compressed_thinking = compressed_thinking_map.get(item.thinking_entry.parent_uuid)
+                compressed_text = compressed_text_map.get(item.thinking_entry.parent_uuid)
+
             await DisplayItemHandler.handle(
                 DisplayItemCommand(
-                    item=item, config=config, show_separator=show_separator, compressed_content=compressed
+                    item=item,
+                    config=config,
+                    show_separator=show_separator,
+                    compressed_thinking=compressed_thinking,
+                    compressed_text=compressed_text,
                 )
             )
             if has_thinking:
@@ -251,7 +255,12 @@ class MonitorLoopHandler:
             EnsureBranchHandler.handle(EnsureBranchCommand(branch_name=find_resp.jsonl_path.stem))
 
         proc_resp = ProcessThinkingHandler.handle(
-            ProcessThinkingCommand(entries=parse_resp.entries, config=config, compressed_map=compressed_map)
+            ProcessThinkingCommand(
+                entries=parse_resp.entries,
+                config=config,
+                compressed_thinking_map=compressed_thinking_map,
+                compressed_text_map=compressed_text_map,
+            )
         )
         config = proc_resp.current_config
 

@@ -13,9 +13,11 @@ class ProcessThinkingCommand:
     Attributes:
         entries: Thinking entries to process.
         config: Current application configuration.
-        compressed_map: Map of entry parent_uuid to pre-compressed content.
+        compressed_thinking_map: Map of entry parent_uuid to pre-compressed thinking content.
+        compressed_text_map: Map of entry parent_uuid to pre-compressed text content.
     """
 
     entries: list[ThinkingEntry]
     config: Config
-    compressed_map: dict[str, str] | None = None
+    compressed_thinking_map: dict[str, str] | None = None
+    compressed_text_map: dict[str, str] | None = None
