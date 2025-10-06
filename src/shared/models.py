@@ -51,6 +51,7 @@ class MessageContent(BaseModel):
 
     type: str = Field(..., description="Content type (e.g., 'thinking', 'text', 'tool_use')")
     thinking: str | None = Field(None, description="Thinking content if type is 'thinking'")
+    text: str | None = Field(None, description="Text content if type is 'text'")
 
 
 class Message(BaseModel):
@@ -88,6 +89,18 @@ class ThinkingEntry(BaseModel):
             for content_item in self.message.content:
                 if isinstance(content_item, MessageContent) and content_item.type == "thinking":
                     return content_item.thinking
+        return None
+
+    def get_text_content(self) -> str | None:
+        """Extract text content from message.
+
+        Returns:
+            Text content if found, None otherwise.
+        """
+        if isinstance(self.message.content, list):
+            for content_item in self.message.content:
+                if isinstance(content_item, MessageContent) and content_item.type == "text":
+                    return content_item.text
         return None
 
 
@@ -217,8 +230,10 @@ class Config(BaseModel):
     sonnet_streaming: bool = Field(default=True, description="Enable streaming output for compression")
     sonnet_colors: bool = Field(default=True, description="Enable colored output for compressed phrases")
     tool_uses: bool = Field(default=True, description="Display tool use calls during monitoring")
-    thinking_separator: str = Field(default="\n\n---\n\n", description="Separator between thinking entries in display")
-    thinking_line_max_length: int = Field(default=55, description="Maximum line length for thinking output formatting")
+    thinking_enabled: bool = Field(default=True, description="Enable thinking content extraction and display")
+    text_enabled: bool = Field(default=False, description="Enable text content extraction and display")
+    separator: str = Field(default="\n\n---\n\n", description="Separator between content entries in display")
+    line_max_length: int = Field(default=55, description="Maximum line length for content output formatting")
     poll_interval_seconds: float = Field(default=1.0, description="Polling interval for JSONL file changes in seconds")
     compression_prompt: str = Field(
         default=(

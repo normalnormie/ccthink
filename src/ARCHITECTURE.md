@@ -123,8 +123,8 @@ class Config(BaseModel):
 
     # Configuration
     poll_interval_seconds: float
-    thinking_line_max_length: int
-    thinking_separator: str
+    line_max_length: int
+    separator: str
     main_branch: str
 ```
 

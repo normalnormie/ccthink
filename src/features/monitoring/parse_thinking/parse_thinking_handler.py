@@ -56,21 +56,40 @@ class ParseThinkingHandler:
         entries: list[ThinkingEntry],
         tool_uses: list[ToolUseEntry],
         ordered_items: list[ParsedItem],
+        *,
+        thinking_enabled: bool,
+        text_enabled: bool,
     ) -> None:
-        """Process assistant message content to extract thinking and tool uses."""
+        """Process assistant message content to extract thinking, text, and tool uses.
+
+        Args:
+            entry: ThinkingEntry to process.
+            entries: List to append thinking/text entries to.
+            tool_uses: List to append tool use entries to.
+            ordered_items: List to append ordered items to.
+            thinking_enabled: Whether to extract thinking content.
+            text_enabled: Whether to extract text content.
+        """
         from src.shared.tool_use_models import ToolUseEntry  # noqa: PLC0415
 
         if not isinstance(entry.message.content, list):
             return
 
         thinking_processed = False
+        text_processed = False
         for content_item in entry.message.content:
-            if content_item.type == "thinking" and content_item.thinking:
+            if content_item.type == "thinking" and content_item.thinking and thinking_enabled:
                 # Include thinking entry once
                 if not thinking_processed:
                     entries.append(entry)
                     ordered_items.append(ParsedItem(thinking_entry=entry))
                     thinking_processed = True
+            elif content_item.type == "text" and content_item.text and text_enabled:
+                # Include text entry once
+                if not text_processed:
+                    entries.append(entry)
+                    ordered_items.append(ParsedItem(thinking_entry=entry))
+                    text_processed = True
             elif content_item.type == "tool_use":
                 # Extract tool use from message content
                 tool_data = {
@@ -126,9 +145,16 @@ class ParseThinkingHandler:
                         # Try to parse as thinking entry (assistant message)
                         entry = ThinkingEntry.model_validate(data)
                         if entry.type == "assistant":
-                            # Extract tool uses and thinking from message content
+                            # Extract tool uses, thinking, and text from message content
+                            thinking_enabled = command.config.thinking_enabled if command.config else True
+                            text_enabled = command.config.text_enabled if command.config else False
                             ParseThinkingHandler._process_assistant_message(
-                                entry, entries, tool_uses, ordered_items
+                                entry,
+                                entries,
+                                tool_uses,
+                                ordered_items,
+                                thinking_enabled=thinking_enabled,
+                                text_enabled=text_enabled,
                             )
                 except (orjson.JSONDecodeError, ValueError):
                     # Skip malformed lines

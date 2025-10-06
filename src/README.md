@@ -45,8 +45,8 @@ Configuration is stored per-project in `ccthink.conf` and globally in `~/.config
   "sonnet_streaming": false,
   "sonnet_colors": false,
   "poll_interval_seconds": 1.0,
-  "thinking_line_max_length": 55,
-  "thinking_separator": "\n\n---\n\n",
+  "line_max_length": 55,
+  "separator": "\n\n---\n\n",
   "main_branch": "master"
 }
 ```

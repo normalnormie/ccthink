@@ -110,6 +110,14 @@ class MonitorLoopHandler:
         if not config.waiting_for_thinking:
             return MonitorLoopResponse(config=config, timer_task=command.timer_task)
 
+        # Skip commit if both content types are disabled
+        if not config.thinking_enabled and not config.text_enabled:
+            config.waiting_for_thinking = False
+            config.accumulated_thinking = []
+            config.waiting_target_uuid = ""
+            SaveConfigHandler.handle(SaveConfigCommand(config=config, config_path=get_config_path()))
+            return MonitorLoopResponse(config=config, timer_task=command.timer_task)
+
         thinking = config.accumulated_thinking
         # Apply sonnet transformation if enabled
         if config.sonnet_enabled:
@@ -121,7 +129,7 @@ class MonitorLoopHandler:
         # Format each entry and join entries with separator
         formatted_entries = []
         for line in thinking:
-            formatted_lines = format_thinking_line(line, max_length=config.thinking_line_max_length)
+            formatted_lines = format_thinking_line(line, max_length=config.line_max_length)
             formatted_entries.append("\n".join(formatted_lines))
         content = "\n\n---\n\n".join(formatted_entries)
 
@@ -205,6 +213,7 @@ class MonitorLoopHandler:
         parse_cmd = ParseThinkingCommand(
             jsonl_path=find_resp.jsonl_path,
             from_position=config.last_file_position,
+            config=config,
         )
         parse_resp = ParseThinkingHandler.handle(parse_cmd)
         config.last_file_position = parse_resp.end_position
@@ -230,31 +239,38 @@ class MonitorLoopHandler:
         config = proc_resp.current_config
 
         if proc_resp.should_commit:
-            thinking_to_commit = proc_resp.thinking_to_commit
+            # Skip commit if both content types are disabled
+            if not config.thinking_enabled and not config.text_enabled:
+                config.last_processed_uuid = proc_resp.target_uuid
+                if timer_task:
+                    timer_task.cancel()
+                    timer_task = None
+            else:
+                thinking_to_commit = proc_resp.thinking_to_commit
 
-            if config.sonnet_enabled:
-                transform_cmd = TransformThinkingCommand(
-                    thinking_lines=thinking_to_commit,
-                    enable_streaming=False,
-                    enable_colors=False,
-                )
-                transform_resp = await TransformThinkingHandler.handle(transform_cmd, config=command.config)
-                thinking_to_commit = list(transform_resp.transformed_lines)
+                if config.sonnet_enabled:
+                    transform_cmd = TransformThinkingCommand(
+                        thinking_lines=thinking_to_commit,
+                        enable_streaming=False,
+                        enable_colors=False,
+                    )
+                    transform_resp = await TransformThinkingHandler.handle(transform_cmd, config=command.config)
+                    thinking_to_commit = list(transform_resp.transformed_lines)
 
-            # Format each entry and join entries with separator
-            formatted_entries = [
-                "\n".join(format_thinking_line(line, max_length=config.thinking_line_max_length))
-                for line in thinking_to_commit
-            ]
-            content = "\n\n---\n\n".join(formatted_entries)
-            if command.enable_git:
-                CommitThinkingHandler.handle(
-                    CommitThinkingCommand(message=content, simulate=config.simulate)
-                )
-            config.last_processed_uuid = proc_resp.target_uuid
-            if timer_task:
-                timer_task.cancel()
-                timer_task = None
+                # Format each entry and join entries with separator
+                formatted_entries = [
+                    "\n".join(format_thinking_line(line, max_length=config.line_max_length))
+                    for line in thinking_to_commit
+                ]
+                content = "\n\n---\n\n".join(formatted_entries)
+                if command.enable_git:
+                    CommitThinkingHandler.handle(
+                        CommitThinkingCommand(message=content, simulate=config.simulate)
+                    )
+                config.last_processed_uuid = proc_resp.target_uuid
+                if timer_task:
+                    timer_task.cancel()
+                    timer_task = None
 
         # Handle timer start
         if proc_resp.should_start_timer:

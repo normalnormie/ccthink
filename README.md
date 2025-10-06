@@ -96,8 +96,10 @@ ccthink stores settings in `ccthink.conf` in your project directory. On first ru
   "sonnet_streaming": false,
   "sonnet_colors": false,
   "tool_uses": true,
+  "thinking_enabled": true,
+  "text_enabled": false,
   "poll_interval_seconds": 1.0,
-  "thinking_line_max_length": 55,
+  "line_max_length": 55,
   "main_branch": "master"
 }
 ```
@@ -347,10 +349,12 @@ Extended settings in `ccthink.conf`:
 ```json
 {
   "poll_interval_seconds": 1.0,
-  "thinking_line_max_length": 55,
-  "thinking_separator": "\n\n---\n\n",
+  "line_max_length": 55,
+  "separator": "\n\n---\n\n",
   "main_branch": "master",
   "tool_uses": true,
+  "thinking_enabled": true,
+  "text_enabled": false,
   "quit_on_conflict": false,
   "projects_dir": "~/.claude/projects/",
   "compression_prompt": "Compress this phrase keeping details, tense, and voice, choosing an ANSI 256 color reflecting its sentiment, output as json {\"color\":\"\",\"text\":\"\"}: {phrase}",
@@ -468,7 +472,7 @@ Adjust polling and formatting for your workflow:
 
 ```json
 {
-  "thinking_line_max_length": 80
+  "line_max_length": 80
 }
 ```
 
@@ -476,7 +480,7 @@ Adjust polling and formatting for your workflow:
 
 ```json
 {
-  "thinking_separator": "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+  "separator": "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
 }
 ```
 
@@ -576,7 +580,7 @@ The `{phrase}` variable is required and will be replaced with the thinking text.
 
 ### Why do some thinking entries show up and others don't?
 
-ccthink displays content from `MessageContent` blocks with `type: "thinking"` and tool use invocations (when `tool_uses` is enabled). Regular text messages and other content types are filtered out. This is intentional to capture Claude's reasoning process and actions.
+By default, ccthink displays content from `MessageContent` blocks with `type: "thinking"` and tool use invocations (when `tool_uses` is enabled). Regular text messages are filtered out unless you enable `text_enabled` in `ccthink.conf`. This focuses on Claude's internal reasoning process while allowing optional text message extraction when needed.
 
 ### What happens to thinking when I switch conversations?
 

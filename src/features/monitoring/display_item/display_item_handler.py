@@ -49,24 +49,32 @@ class DisplayItemHandler:
         if not item.thinking_entry:
             return
 
-        thinking_content = item.thinking_entry.get_thinking_content()
-        if not thinking_content:
+        # Try to get thinking content if enabled
+        content = None
+        if config.thinking_enabled:
+            content = item.thinking_entry.get_thinking_content()
+
+        # Try to get text content if enabled and no thinking found
+        if not content and config.text_enabled:
+            content = item.thinking_entry.get_text_content()
+
+        if not content:
             return
 
         # Show separator if requested
         if command.show_separator:
             if config.verbose:
-                for sep_line in config.thinking_separator.split("\n"):
+                for sep_line in config.separator.split("\n"):
                     logger.info("%s", sep_line)
             else:
-                separator_end = "" if config.thinking_separator.endswith("\n") else "\n"
-                print(config.thinking_separator, end=separator_end)  # noqa: T201
+                separator_end = "" if config.separator.endswith("\n") else "\n"
+                print(config.separator, end=separator_end)  # noqa: T201
 
         # Display with Sonnet transformation if enabled
         if config.sonnet_enabled:
             transform_resp = await TransformThinkingHandler.handle(
                 TransformThinkingCommand(
-                    thinking_lines=[thinking_content],
+                    thinking_lines=[content],
                     enable_streaming=config.sonnet_streaming,
                     enable_colors=config.sonnet_colors,
                 ),
@@ -74,7 +82,7 @@ class DisplayItemHandler:
             )
             for line in transform_resp.transformed_lines:
                 for formatted_line in format_colored_thinking_line(
-                    line, max_length=config.thinking_line_max_length
+                    line, max_length=config.line_max_length
                 ):
                     if config.verbose:
                         logger.info("%s", formatted_line)
@@ -84,8 +92,8 @@ class DisplayItemHandler:
                 logger.warning("%s", error)
         else:
             # Display without transformation
-            max_len = config.thinking_line_max_length
-            for formatted_line in format_thinking_line(thinking_content, max_length=max_len):
+            max_len = config.line_max_length
+            for formatted_line in format_thinking_line(content, max_length=max_len):
                 if config.verbose:
                     logger.info("%s", formatted_line)
                 else:

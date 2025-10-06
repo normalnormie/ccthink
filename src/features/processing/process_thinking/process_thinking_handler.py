@@ -52,18 +52,23 @@ class ProcessThinkingHandler:
         """
         config = command.config
 
-        # Extract thinking content from entries
-        thinking_content = [
-            entry.get_thinking_content() or ""
-            for entry in command.entries
-            if entry.get_thinking_content()
-        ]
+        # Extract thinking and text content from entries
+        content_items = []
+        for entry in command.entries:
+            if config.thinking_enabled:
+                thinking = entry.get_thinking_content()
+                if thinking:
+                    content_items.append(thinking)
+            if config.text_enabled:
+                text = entry.get_text_content()
+                if text:
+                    content_items.append(text)
 
         if not config.waiting_for_thinking:
-            # Not waiting - start waiting if we have thinking
-            if thinking_content:
+            # Not waiting - start waiting if we have content
+            if content_items:
                 config.waiting_for_thinking = True
-                config.accumulated_thinking = thinking_content
+                config.accumulated_thinking = content_items
                 config.waiting_target_uuid = command.entries[-1].parent_uuid
 
                 return ProcessThinkingResponse(
@@ -74,7 +79,7 @@ class ProcessThinkingHandler:
                     current_config=config,
                 )
 
-            # No thinking to process
+            # No content to process
             return ProcessThinkingResponse(
                 should_commit=False,
                 thinking_to_commit=[],
@@ -83,12 +88,12 @@ class ProcessThinkingHandler:
                 current_config=config,
             )
 
-        # Currently waiting - check for additional thinking
-        total_thinking = len(config.accumulated_thinking) + len(thinking_content)
+        # Currently waiting - check for additional content
+        total_content = len(config.accumulated_thinking) + len(content_items)
 
-        if total_thinking > len(config.accumulated_thinking):
-            # Have additional thinking - commit accumulated + first additional
-            to_commit = [*config.accumulated_thinking, thinking_content[0]]
+        if total_content > len(config.accumulated_thinking):
+            # Have additional content - commit accumulated + first additional
+            to_commit = [*config.accumulated_thinking, content_items[0]]
             target_uuid = command.entries[0].parent_uuid
 
             # Reset waiting state
@@ -104,7 +109,7 @@ class ProcessThinkingHandler:
                 current_config=config,
             )
 
-        # No additional thinking yet
+        # No additional content yet
         return ProcessThinkingResponse(
             should_commit=False,
             thinking_to_commit=[],
