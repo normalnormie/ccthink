@@ -60,6 +60,7 @@ class DisplayItemHandler:
                 print(config.separator, end=separator_end)  # noqa: T201
 
         # Display thinking content if enabled
+        thinking_displayed = False
         if config.thinking_enabled:
             thinking_content = item.thinking_entry.get_thinking_content()
             if thinking_content:
@@ -68,11 +69,21 @@ class DisplayItemHandler:
                     compressed_content=command.compressed_thinking,
                     config=config,
                 )
+                thinking_displayed = True
 
         # Display text content if enabled
         if config.text_enabled:
             text_content = item.thinking_entry.get_text_content()
             if text_content:
+                # Show separator if both thinking and text are displayed
+                if thinking_displayed:
+                    if config.verbose:
+                        for sep_line in config.separator.split("\n"):
+                            logger.info("%s", sep_line)
+                    else:
+                        separator_end = "" if config.separator.endswith("\n") else "\n"
+                        print(config.separator, end=separator_end)  # noqa: T201
+
                 await DisplayItemHandler._display_content(
                     content=text_content,
                     compressed_content=command.compressed_text,
