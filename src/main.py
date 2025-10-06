@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -34,6 +35,12 @@ from src.features.git_operations.merge_branch.merge_branch_command import (
 from src.features.git_operations.merge_branch.merge_branch_handler import (
     MergeBranchHandler,
 )
+from src.features.gitignore.ensure_gitignore.ensure_gitignore_command import (
+    EnsureGitignoreCommand,
+)
+from src.features.gitignore.ensure_gitignore.ensure_gitignore_handler import (
+    EnsureGitignoreHandler,
+)
 from src.features.monitoring.monitor_loop.monitor_loop_command import (
     MonitorLoopCommand,
 )
@@ -43,6 +50,7 @@ from src.features.monitoring.monitor_loop.monitor_loop_handler import (
 from src.shared.constants import (
     DEFAULT_PROJECTS_DIR,
     FALLBACK_PROJECTS_DIR,
+    GITIGNORE_ENTRIES,
     get_config_path,
 )
 
@@ -74,6 +82,13 @@ async def commit_thinking(cfg: Config) -> None:  # noqa: RUF029
     cmd = CommitThinkingCommand(message=content, simulate=config.simulate)
 
     if enable_git:
+        # Ensure ccthink.conf is in .gitignore before committing
+        EnsureGitignoreHandler.handle(
+            EnsureGitignoreCommand(
+                entries=GITIGNORE_ENTRIES,
+                gitignore_path=Path.cwd() / ".gitignore",
+            )
+        )
         CommitThinkingHandler.handle(cmd)
 
     config.last_processed_uuid = config.waiting_target_uuid
@@ -105,6 +120,30 @@ def get_claude_dir() -> Path:
     return claude_dir
 
 
+def ensure_gitignore_and_merge(
+    source_branch: str, target_branch: str, quit_on_conflict: bool, verbose: bool, context: str = ""
+) -> None:
+    """Ensure .gitignore is configured and merge branch."""
+    EnsureGitignoreHandler.handle(
+        EnsureGitignoreCommand(entries=GITIGNORE_ENTRIES, gitignore_path=Path.cwd() / ".gitignore")
+    )
+    response = MergeBranchHandler.handle(
+        MergeBranchCommand(
+            source_branch=source_branch,
+            target_branch=target_branch,
+            quit_on_conflict=quit_on_conflict,
+        )
+    )
+    ctx = f" {context}" if context else ""
+    if response.had_conflict and quit_on_conflict:
+        logger.error("Merge conflict%s: %s", ctx, response.error)
+        sys.exit(1)
+    elif not response.success:
+        logger.error("Merge failed%s: %s", ctx, response.error)
+    elif verbose:
+        logger.info("Merge %s -> %s", source_branch, target_branch)
+
+
 async def process_file_switch(current_file: Path) -> None:
     """Handle switching to different JSONL file."""
     if config is None:
@@ -118,12 +157,13 @@ async def process_file_switch(current_file: Path) -> None:
             await commit_thinking(config)
 
         branch = Path(config.monitored_file).stem
-        merge_cmd = MergeBranchCommand(
+        ensure_gitignore_and_merge(
             source_branch=branch,
             target_branch=config.main_branch,
             quit_on_conflict=config.quit_on_conflict,
+            verbose=config.verbose,
+            context="during file switch",
         )
-        MergeBranchHandler.handle(merge_cmd)
 
     config.monitored_file = str(current_file)
     config.last_file_position = current_file.stat().st_size
@@ -177,12 +217,11 @@ async def shutdown() -> None:
         if config.monitored_file:
             branch = Path(config.monitored_file).stem
             if branch != config.main_branch:
-                MergeBranchHandler.handle(
-                    MergeBranchCommand(
-                        source_branch=branch,
-                        target_branch=config.main_branch,
-                        quit_on_conflict=config.quit_on_conflict,
-                    )
+                ensure_gitignore_and_merge(
+                    source_branch=branch,
+                    target_branch=config.main_branch,
+                    quit_on_conflict=config.quit_on_conflict,
+                    verbose=config.verbose,
                 )
 
     if config:
@@ -220,6 +259,26 @@ def main() -> None:
 
     # Use commit_enabled from config (persisted state)
     enable_git = config.commit_enabled
+
+    # Validate main_branch exists if git operations are enabled
+    if enable_git:
+        branch_exists = MergeBranchHandler.branch_exists(config.main_branch)
+
+        if not branch_exists:
+            logger.warning(
+                "Configured main_branch '%s' does not exist in git repository",
+                config.main_branch
+            )
+
+            # Check for common main/master confusion
+            if config.main_branch == "master" and MergeBranchHandler.branch_exists("main"):
+                logger.warning(
+                    "Branch 'main' exists but you configured 'master' - consider updating main_branch"
+                )
+            elif config.main_branch == "main" and MergeBranchHandler.branch_exists("master"):
+                logger.warning(
+                    "Branch 'master' exists but you configured 'main' - consider updating main_branch"
+                )
 
     # Build feature flags for startup message
     features = [

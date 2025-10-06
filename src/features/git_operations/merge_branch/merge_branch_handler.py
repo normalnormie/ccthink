@@ -48,6 +48,28 @@ class MergeBranchHandler:
             return None
 
     @staticmethod
+    def branch_exists(branch_name: str) -> bool:
+        """Check if a git branch exists.
+
+        Args:
+            branch_name: Name of the branch to check.
+
+        Returns:
+            True if branch exists, False otherwise.
+        """
+        try:
+            subprocess.run(  # noqa: S603
+                ["git", "rev-parse", "--verify", branch_name],  # noqa: S607
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except subprocess.CalledProcessError:
+            return False
+        else:
+            return True
+
+    @staticmethod
     def handle(command: MergeBranchCommand) -> MergeBranchResponse:
         """Merge source branch into target branch.
 
