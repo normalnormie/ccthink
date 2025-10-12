@@ -58,7 +58,7 @@ class ParseThinkingHandler:
         ordered_items: list[ParsedItem],
         *,
         thinking_enabled: bool,
-        text_enabled: bool,
+        chat_text_enabled: bool,
     ) -> None:
         """Process assistant message content to extract thinking, text, and tool uses.
 
@@ -68,7 +68,7 @@ class ParseThinkingHandler:
             tool_uses: List to append tool use entries to.
             ordered_items: List to append ordered items to.
             thinking_enabled: Whether to extract thinking content.
-            text_enabled: Whether to extract text content.
+            chat_text_enabled: Whether to extract chat text content.
         """
         from src.shared.tool_use_models import ToolUseEntry  # noqa: PLC0415
 
@@ -83,7 +83,7 @@ class ParseThinkingHandler:
                     entries.append(entry)
                     ordered_items.append(ParsedItem(thinking_entry=entry))
                     entry_added = True
-            elif content_item.type == "text" and content_item.text and text_enabled:
+            elif content_item.type == "text" and content_item.text and chat_text_enabled:
                 # Include text entry once
                 if not entry_added:
                     entries.append(entry)
@@ -146,14 +146,14 @@ class ParseThinkingHandler:
                         if entry.type == "assistant":
                             # Extract tool uses, thinking, and text from message content
                             thinking_enabled = command.config.thinking_enabled if command.config else True
-                            text_enabled = command.config.text_enabled if command.config else False
+                            chat_text_enabled = command.config.chat_text_enabled if command.config else False
                             ParseThinkingHandler._process_assistant_message(
                                 entry,
                                 entries,
                                 tool_uses,
                                 ordered_items,
                                 thinking_enabled=thinking_enabled,
-                                text_enabled=text_enabled,
+                                chat_text_enabled=chat_text_enabled,
                             )
                 except (orjson.JSONDecodeError, ValueError):
                     # Skip malformed lines

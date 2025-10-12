@@ -19,6 +19,8 @@ class ParseArgumentsResponse:
         disable_streaming: Disable streaming output (None if not specified)
         enable_colors: Enable colored output (None if not specified)
         disable_colors: Disable colored output (None if not specified)
+        enable_chat_text: Enable chat text extraction (None if not specified)
+        disable_chat_text: Disable chat text extraction (None if not specified)
         enable_verbose: Enable verbose logging (None if not specified)
         disable_verbose: Disable verbose logging (None if not specified)
         enable_simulate: Enable simulate/dry-run mode (None if not specified)
@@ -33,6 +35,8 @@ class ParseArgumentsResponse:
     disable_streaming: bool | None
     enable_colors: bool | None
     disable_colors: bool | None
+    enable_chat_text: bool | None
+    disable_chat_text: bool | None
     enable_verbose: bool | None
     disable_verbose: bool | None
     enable_simulate: bool | None

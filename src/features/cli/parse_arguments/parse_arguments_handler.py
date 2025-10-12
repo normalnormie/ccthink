@@ -32,76 +32,101 @@ class ParseArgumentsHandler:
             epilog="Settings persist to ccthink.conf and are remembered across sessions.",
         )
 
+        # Enable options group
+        enable_group = parser.add_argument_group("enable options")
+
         # Git commit operations
-        parser.add_argument(
+        enable_group.add_argument(
             "--commit",
             action="store_true",
             help="Enable git commits for thinking entries (creates conversation-specific branches)",
         )
-        parser.add_argument(
+
+        # Sonnet compression
+        enable_group.add_argument(
+            "--sonnet",
+            action="store_true",
+            help="Enable Sonnet phrase compression with sentiment colors (uses Claude Code auth, no API key needed)",
+        )
+
+        # Colored output
+        enable_group.add_argument(
+            "--colors",
+            action="store_true",
+            help="Enable ANSI 256 sentiment-based colors for compressed phrases",
+        )
+
+        # Chat text extraction
+        enable_group.add_argument(
+            "--chat-text",
+            action="store_true",
+            help="Enable chat text content extraction and display",
+        )
+
+        # Verbose logging
+        enable_group.add_argument(
+            "--verbose",
+            action="store_true",
+            help="Enable verbose logging with timestamps (all output goes through logger)",
+        )
+
+        # Simulate mode
+        enable_group.add_argument(
+            "--simulate",
+            action="store_true",
+            help="Enable dry-run mode (skip actual git operations, useful for testing)",
+        )
+
+        # Streaming output (last in enable group)
+        enable_group.add_argument(
+            "--streaming",
+            action="store_true",
+            help="Enable streaming output for Sonnet compression (token-by-token display)",
+        )
+
+        # Disable options group (separated by newline)
+        disable_group = parser.add_argument_group("disable options")
+
+        disable_group.add_argument(
             "--no-commit",
             action="store_true",
             help="Disable git commits (display only mode)",
         )
 
-        # Sonnet compression
-        parser.add_argument(
-            "--sonnet",
-            action="store_true",
-            help="Enable Sonnet phrase compression with sentiment colors (uses Claude Code auth, no API key needed)",
-        )
-        parser.add_argument(
+        disable_group.add_argument(
             "--no-sonnet",
             action="store_true",
             help="Disable Sonnet phrase compression (show raw thinking)",
         )
 
-        # Streaming output
-        parser.add_argument(
-            "--streaming",
-            action="store_true",
-            help="Enable streaming output for Sonnet compression (token-by-token display)",
-        )
-        parser.add_argument(
-            "--no-streaming",
-            action="store_true",
-            help="Disable streaming output (show complete compressed result instantly)",
-        )
-
-        # Colored output
-        parser.add_argument(
-            "--colors",
-            action="store_true",
-            help="Enable ANSI 256 sentiment-based colors for compressed phrases",
-        )
-        parser.add_argument(
+        disable_group.add_argument(
             "--no-colors",
             action="store_true",
             help="Disable colored output (plain text only)",
         )
 
-        # Verbose logging
-        parser.add_argument(
-            "--verbose",
+        disable_group.add_argument(
+            "--no-chat-text",
             action="store_true",
-            help="Enable verbose logging with timestamps (all output goes through logger)",
+            help="Disable chat text content extraction (thinking only)",
         )
-        parser.add_argument(
+
+        disable_group.add_argument(
             "--no-verbose",
             action="store_true",
             help="Disable verbose logging (standard output mode)",
         )
 
-        # Simulate mode
-        parser.add_argument(
-            "--simulate",
-            action="store_true",
-            help="Enable dry-run mode (skip actual git operations, useful for testing)",
-        )
-        parser.add_argument(
+        disable_group.add_argument(
             "--no-simulate",
             action="store_true",
             help="Disable dry-run mode (perform actual git operations)",
+        )
+
+        disable_group.add_argument(
+            "--no-streaming",
+            action="store_true",
+            help="Disable streaming output (show complete compressed result instantly)",
         )
 
         args = parser.parse_args(command.argv)
@@ -115,6 +140,8 @@ class ParseArgumentsHandler:
             disable_streaming=args.no_streaming or None,
             enable_colors=args.colors or None,
             disable_colors=args.no_colors or None,
+            enable_chat_text=args.chat_text or None,
+            disable_chat_text=args.no_chat_text or None,
             enable_verbose=args.verbose or None,
             disable_verbose=args.no_verbose or None,
             enable_simulate=args.simulate or None,

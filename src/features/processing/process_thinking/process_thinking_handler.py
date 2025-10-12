@@ -68,7 +68,7 @@ class ProcessThinkingHandler:
                         entry_contents.append(thinking)
 
             # Extract text content
-            if config.text_enabled:
+            if config.chat_text_enabled:
                 if command.compressed_text_map and entry.parent_uuid in command.compressed_text_map:
                     entry_contents.append(command.compressed_text_map[entry.parent_uuid])
                 else:

@@ -80,6 +80,13 @@ class BootstrapApplicationHandler:
             config.sonnet_colors = False
             config_modified = True
 
+        if command.enable_chat_text:
+            config.chat_text_enabled = True
+            config_modified = True
+        elif command.disable_chat_text:
+            config.chat_text_enabled = False
+            config_modified = True
+
         if command.enable_verbose:
             config.verbose = True
             config_modified = True

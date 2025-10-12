@@ -28,7 +28,7 @@ class TestCompressEntriesHandler:
         config = Config(
             sonnet_enabled=True,
             thinking_enabled=True,
-            text_enabled=True,
+            chat_text_enabled=True,
         )
 
         # Create entry with both thinking and text content
@@ -83,12 +83,12 @@ class TestCompressEntriesHandler:
 
     @pytest.mark.asyncio
     async def test_compress_only_thinking(self) -> None:
-        """Verify only thinking is compressed when text_enabled=False."""
+        """Verify only thinking is compressed when chat_text_enabled=False."""
         # Create config with only thinking enabled
         config = Config(
             sonnet_enabled=True,
             thinking_enabled=True,
-            text_enabled=False,
+            chat_text_enabled=False,
         )
 
         # Create entry with both thinking and text content
@@ -136,7 +136,7 @@ class TestCompressEntriesHandler:
         config = Config(
             sonnet_enabled=True,
             thinking_enabled=False,
-            text_enabled=True,
+            chat_text_enabled=True,
         )
 
         # Create entry with both thinking and text content
@@ -183,7 +183,7 @@ class TestCompressEntriesHandler:
         config = Config(
             sonnet_enabled=True,
             thinking_enabled=True,
-            text_enabled=True,
+            chat_text_enabled=True,
         )
 
         # Create entry with no thinking or text content
@@ -211,7 +211,7 @@ class TestCompressEntriesHandler:
         config = Config(
             sonnet_enabled=True,
             thinking_enabled=True,
-            text_enabled=True,
+            chat_text_enabled=True,
         )
 
         # Create multiple entries

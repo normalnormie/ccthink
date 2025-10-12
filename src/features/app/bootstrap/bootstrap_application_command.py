@@ -21,6 +21,8 @@ class BootstrapApplicationCommand:
         disable_streaming: Disable streaming output (None if not specified)
         enable_colors: Enable colored output (None if not specified)
         disable_colors: Disable colored output (None if not specified)
+        enable_chat_text: Enable chat text extraction (None if not specified)
+        disable_chat_text: Disable chat text extraction (None if not specified)
         enable_verbose: Enable verbose logging (None if not specified)
         disable_verbose: Disable verbose logging (None if not specified)
         enable_simulate: Enable simulate/dry-run mode (None if not specified)
@@ -36,6 +38,8 @@ class BootstrapApplicationCommand:
     disable_streaming: bool | None = None
     enable_colors: bool | None = None
     disable_colors: bool | None = None
+    enable_chat_text: bool | None = None
+    disable_chat_text: bool | None = None
     enable_verbose: bool | None = None
     disable_verbose: bool | None = None
     enable_simulate: bool | None = None

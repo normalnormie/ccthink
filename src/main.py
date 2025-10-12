@@ -48,6 +48,7 @@ from src.features.monitoring.monitor_loop.monitor_loop_handler import (
     MonitorLoopHandler,
 )
 from src.shared.constants import (
+    ASCII_LOGO,
     DEFAULT_PROJECTS_DIR,
     FALLBACK_PROJECTS_DIR,
     GITIGNORE_ENTRIES,
@@ -239,18 +240,13 @@ def main() -> None:
     # Bootstrap application
     bootstrap_cmd = BootstrapApplicationCommand(
         config_path=get_config_path(),
-        enable_commit=parse_resp.enable_commit,
-        disable_commit=parse_resp.disable_commit,
-        enable_sonnet=parse_resp.enable_sonnet,
-        disable_sonnet=parse_resp.disable_sonnet,
-        enable_streaming=parse_resp.enable_streaming,
-        disable_streaming=parse_resp.disable_streaming,
-        enable_colors=parse_resp.enable_colors,
-        disable_colors=parse_resp.disable_colors,
-        enable_verbose=parse_resp.enable_verbose,
-        disable_verbose=parse_resp.disable_verbose,
-        enable_simulate=parse_resp.enable_simulate,
-        disable_simulate=parse_resp.disable_simulate,
+        enable_commit=parse_resp.enable_commit, disable_commit=parse_resp.disable_commit,
+        enable_sonnet=parse_resp.enable_sonnet, disable_sonnet=parse_resp.disable_sonnet,
+        enable_streaming=parse_resp.enable_streaming, disable_streaming=parse_resp.disable_streaming,
+        enable_colors=parse_resp.enable_colors, disable_colors=parse_resp.disable_colors,
+        enable_chat_text=parse_resp.enable_chat_text, disable_chat_text=parse_resp.disable_chat_text,
+        enable_verbose=parse_resp.enable_verbose, disable_verbose=parse_resp.disable_verbose,
+        enable_simulate=parse_resp.enable_simulate, disable_simulate=parse_resp.disable_simulate,
     )
     bootstrap_resp = BootstrapApplicationHandler.handle(
         bootstrap_cmd, shutdown_event_setter=shutdown_event.set
@@ -263,31 +259,31 @@ def main() -> None:
     # Validate main_branch exists if git operations are enabled
     if enable_git:
         branch_exists = MergeBranchHandler.branch_exists(config.main_branch)
-
         if not branch_exists:
-            logger.warning(
-                "Configured main_branch '%s' does not exist in git repository",
-                config.main_branch
-            )
-
+            logger.warning("Configured main_branch '%s' does not exist in git repository", config.main_branch)
             # Check for common main/master confusion
-            if config.main_branch == "master" and MergeBranchHandler.branch_exists("main"):
+            alternative = "main" if config.main_branch == "master" else "master"
+            if MergeBranchHandler.branch_exists(alternative):
                 logger.warning(
-                    "Branch 'main' exists but you configured 'master' - consider updating main_branch"
-                )
-            elif config.main_branch == "main" and MergeBranchHandler.branch_exists("master"):
-                logger.warning(
-                    "Branch 'master' exists but you configured 'main' - consider updating main_branch"
+                    "Branch '%s' exists but you configured '%s' - consider updating main_branch",
+                    alternative, config.main_branch
                 )
 
-    # Build feature flags for startup message
-    features = [
-        f"commit: {enable_git}",
-        f"sonnet: {config.sonnet_enabled}",
-        f"poll: {config.poll_interval_seconds}s",
+    print(ASCII_LOGO)  # noqa: T201
+    # Build feature lists grouped by state
+    all_features = [
+        ("commit", enable_git), ("sonnet", config.sonnet_enabled),
+        ("colors", config.sonnet_colors), ("chat_text", config.chat_text_enabled),
+        ("verbose", config.verbose), ("simulate", config.simulate),
+        ("streaming", config.sonnet_streaming),
     ]
+    active = [name for name, enabled in all_features if enabled]
+    active.append(f"poll: {config.poll_interval_seconds}s")
+    inactive = [name for name, enabled in all_features if not enabled]
 
-    logger.info(f"ccthink started ({', '.join(features)})")
+    logger.info("ccthink started")
+    logger.info("  Active: %s", ", ".join(active))
+    logger.info("  Inactive: %s", ", ".join(inactive))
 
     try:
         asyncio.run(main_loop())

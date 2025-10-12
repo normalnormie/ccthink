@@ -114,7 +114,7 @@ class MonitorLoopHandler:
             return MonitorLoopResponse(config=config, timer_task=command.timer_task)
 
         # Skip commit if both content types are disabled
-        if not config.thinking_enabled and not config.text_enabled:
+        if not config.thinking_enabled and not config.chat_text_enabled:
             config.waiting_for_thinking = False
             config.accumulated_thinking = []
             config.waiting_target_uuid = ""
@@ -266,7 +266,7 @@ class MonitorLoopHandler:
 
         if proc_resp.should_commit:
             # Skip commit if both content types are disabled
-            if not config.thinking_enabled and not config.text_enabled:
+            if not config.thinking_enabled and not config.chat_text_enabled:
                 config.last_processed_uuid = proc_resp.target_uuid
                 if timer_task:
                     timer_task.cancel()
