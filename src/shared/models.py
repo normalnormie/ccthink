@@ -231,7 +231,9 @@ class Config(BaseModel):
     sonnet_colors: bool = Field(default=True, description="Enable colored output for compressed phrases")
     tool_uses: bool = Field(default=True, description="Display tool use calls during monitoring")
     thinking_enabled: bool = Field(default=True, description="Enable thinking content extraction and display")
-    text_enabled: bool = Field(default=False, description="Enable text content extraction and display")
+    chat_text_enabled: bool = Field(default=False, description="Enable chat text content extraction and display")
+    thinking_color: str = Field(default="#A5D8FF", description="Color for thinking content (CSS name or hex)")
+    chat_text_color: str = Field(default="#FFFACD", description="Color for chat text content (CSS name or hex)")
     separator: str = Field(default="\n\n---\n\n", description="Separator between content entries in display")
     line_max_length: int = Field(default=55, description="Maximum line length for content output formatting")
     poll_interval_seconds: float = Field(default=1.0, description="Polling interval for JSONL file changes in seconds")
@@ -250,6 +252,8 @@ class Config(BaseModel):
     def load_from_file(cls, config_path: Path) -> Config:
         """Load configuration from JSON file.
 
+        Handles backwards compatibility for text_enabled -> chat_text_enabled migration.
+
         Args:
             config_path: Path to configuration file.
 
@@ -261,6 +265,11 @@ class Config(BaseModel):
 
         with config_path.open("rb") as f:
             data = orjson.loads(f.read())
+
+            # Backwards compatibility: migrate text_enabled to chat_text_enabled
+            if "text_enabled" in data and "chat_text_enabled" not in data:
+                data["chat_text_enabled"] = data.pop("text_enabled")
+
             return cls.model_validate(data)
 
     def save_to_file(self, config_path: Path) -> None:
