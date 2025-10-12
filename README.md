@@ -8,14 +8,23 @@
 
 ccthink watches your Claude Code conversation sessions, extracts thinking content, and optionally commits it to git. Think of it as a background process that captures your AI assistant's reasoning while you work.
 
+## Related projects
+
+1. Patch Claude Code to always show thinking
+   https://github.com/aleks-apostle/claude-code-thinking-patch
+2. CC chats in real-time on a web UI `npx claude-code-templates@latest --chats`
+   https://github.com/davila7/claude-code-templates
+3. Export CC logs
+   https://github.com/ZeroSumQuant/claude-conversation-extractor
+
 ## What It Does
 
-- **Displays thinking** as it arrives from Claude Code sessions
-- **Shows tool uses** (Bash, Read, Write, etc.) in chronological order with thinking
+- **Displays thinking/chat** as it arrives from Claude Code sessions
+- **Shows tool uses** (Bash, Read, Write, etc.) in chronological order with thinking (optional)
 - **Accumulates thinking entries** before committing (prevents commit spam)
-- **Compresses phrases** using Sonnet to make thinking more scannable
-- **Applies sentiment colors** via ANSI 256 codes for visual feedback
-- **Manages git branches** automatically for each conversation session
+- **Compresses phrases** using Sonnet to make thinking more scannable (optional)
+- **Applies sentiment colors** via ANSI 256 codes for visual feedback (optional)
+- **Manages git branches** automatically for each conversation session (optional)
 - **No API keys required** - uses Claude Code's authentication
 
 ## Use Cases
@@ -97,7 +106,9 @@ ccthink stores settings in `ccthink.conf` in your project directory. On first ru
   "sonnet_colors": false,
   "tool_uses": true,
   "thinking_enabled": true,
-  "text_enabled": false,
+  "chat_text_enabled": false,
+  "thinking_color": "#A5D8FF",
+  "chat_text_color": "#FFFACD",
   "poll_interval_seconds": 1.0,
   "line_max_length": 55,
   "main_branch": "master"
@@ -342,6 +353,50 @@ When `--colors` is enabled, compressed phrases display with sentiment-appropriat
 - **Cache**: SHA256 hash-based, FIFO eviction at 100 items
 - **Fallback**: Shows original thinking if compression fails
 
+## Content Type Colors
+
+Configure colors for thinking and chat content independently:
+
+```json
+{
+  "thinking_color": "#A5D8FF", // Light blue (default)
+  "chat_text_color": "#FFFACD" // Light yellow (default)
+}
+```
+
+**Supported color formats:**
+
+- **CSS color names**: `"lightblue"`, `"red"`, `"magenta"`, `"yellow"`, `"white"`, etc.
+- **Hex codes**: `"#A5D8FF"`, `"#FFFACD"`, `"#FF5733"`
+
+**Color application logic:**
+
+1. **When Sonnet compression is disabled** (`sonnet_enabled: false`):
+   - Configured colors are always applied to raw content
+   - Thinking content uses `thinking_color`
+   - Chat text content uses `chat_text_color`
+
+2. **When Sonnet compression is enabled** (`sonnet_enabled: true`):
+   - Compression service applies sentiment-aware coloring
+   - If compression returns no color: Falls back to configured colors
+   - If compression fails completely: Falls back to configured colors
+
+**Examples:**
+
+```bash
+# Set custom colors via configuration file
+echo '{
+  "thinking_color": "lightblue",
+  "chat_text_color": "yellow"
+}' > ccthink.conf
+
+# Or use hex codes for precise colors
+echo '{
+  "thinking_color": "#4A90E2",
+  "chat_text_color": "#FFD700"
+}' > ccthink.conf
+```
+
 ## Configuration Options
 
 Extended settings in `ccthink.conf`:
@@ -354,7 +409,9 @@ Extended settings in `ccthink.conf`:
   "main_branch": "master",
   "tool_uses": true,
   "thinking_enabled": true,
-  "text_enabled": false,
+  "chat_text_enabled": false,
+  "thinking_color": "#A5D8FF",
+  "chat_text_color": "#FFFACD",
   "quit_on_conflict": false,
   "projects_dir": "~/.claude/projects/",
   "compression_prompt": "Compress this phrase keeping details, tense, and voice, choosing an ANSI 256 color reflecting its sentiment, output as json {\"color\":\"\",\"text\":\"\"}: {phrase}",
@@ -580,7 +637,7 @@ The `{phrase}` variable is required and will be replaced with the thinking text.
 
 ### Why do some thinking entries show up and others don't?
 
-By default, ccthink displays content from `MessageContent` blocks with `type: "thinking"` and tool use invocations (when `tool_uses` is enabled). Regular text messages are filtered out unless you enable `text_enabled` in `ccthink.conf`. This focuses on Claude's internal reasoning process while allowing optional text message extraction when needed.
+By default, ccthink displays content from `MessageContent` blocks with `type: "thinking"` and tool use invocations (when `tool_uses` is enabled). Regular text messages are filtered out unless you enable `chat_text_enabled` in `ccthink.conf`. This focuses on Claude's internal reasoning process while allowing optional text message extraction when needed.
 
 ### What happens to thinking when I switch conversations?
 
@@ -631,8 +688,8 @@ The original thinking is always preserved and displayed.
 4. **Accumulates** multiple entries for 30 seconds or until more thinking arrives
 5. **Optionally compresses** with Sonnet (concurrently, with caching and retry)
 6. **Formats** long lines at natural breakpoints for readability
-7. **Commits** to conversation-specific git branch
-8. **Merges** branches when switching between conversation sessions
+7. **Commits** to conversation-specific git branch (optional)
+8. **Merges** branches when switching between conversation sessions (optional)
 
 ## Requirements
 

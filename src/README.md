@@ -46,7 +46,7 @@ Configuration is stored per-project in `ccthink.conf` and globally in `~/.config
   "sonnet_streaming": false,
   "sonnet_colors": false,
   "thinking_enabled": true,
-  "text_enabled": false,
+  "chat_text_enabled": false,
   "poll_interval_seconds": 1.0,
   "line_max_length": 55,
   "separator": "\n\n---\n\n",
@@ -57,7 +57,7 @@ Configuration is stored per-project in `ccthink.conf` and globally in `~/.config
 Content type controls:
 
 - `thinking_enabled`: Extract and process thinking content (default: true)
-- `text_enabled`: Extract and process text content (default: false)
+- `chat_text_enabled`: Extract and process text content (default: false)
 
 ### CLI Flags
 
@@ -174,7 +174,7 @@ Core dependencies managed in `requirements.txt`:
 
 1. Loop through all entries
 2. Extract thinking content if `thinking_enabled` is true
-3. Extract text content if `text_enabled` is true
+3. Extract text content if `chat_text_enabled` is true
 4. Compress each content type separately using Sonnet transformation
 5. Return separate maps for compressed thinking and text content
 

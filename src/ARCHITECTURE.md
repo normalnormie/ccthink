@@ -45,7 +45,8 @@ src/
 ├── main.py                       # Application orchestration
 ├── shared/
 │   ├── models.py                 # Pydantic data models
-│   └── constants.py              # Application constants
+│   ├── constants.py              # Application constants
+│   └── color_converter.py        # CSS/hex to ANSI 256 conversion
 └── features/
     ├── app/bootstrap/            # Application initialization
     ├── cli/parse_arguments/      # CLI argument parsing
@@ -123,7 +124,7 @@ class Config(BaseModel):
     sonnet_streaming: bool
     sonnet_colors: bool
     thinking_enabled: bool
-    text_enabled: bool
+    chat_text_enabled: bool
 
     # Configuration
     poll_interval_seconds: float
@@ -248,6 +249,62 @@ graph LR
     L --> M[Display with Pre-compressed]
     L --> N[Commit Plain Text]
 ```
+
+### Content Type Color Application Flow
+
+Colors are applied to thinking and chat content through a multi-stage process:
+
+```mermaid
+graph TD
+    A[Parse Content] --> B{Sonnet Enabled?}
+    B -->|No| C[Apply Configured Color]
+    B -->|Yes| D[Compress Content]
+    D --> E{Compression Success?}
+    E -->|No| F[Fallback: Apply Configured Color]
+    E -->|Yes| G{Has ANSI Color?}
+    G -->|No| H[Apply Configured Color]
+    G -->|Yes| I[Use Compression Color]
+    C --> J[Display with Color]
+    F --> J
+    H --> J
+    I --> J
+```
+
+**Color Configuration:**
+
+- `thinking_color`: CSS name or hex (default: `#A5D8FF` light blue)
+- `chat_text_color`: CSS name or hex (default: `#FFFACD` light yellow)
+
+**Color Conversion:**
+
+1. CSS color name → RGB (via webcolors library)
+2. Hex color code → RGB (manual parsing)
+3. RGB → ANSI 256 code (6x6x6 color cube algorithm)
+
+**Application Logic:**
+
+| Scenario                     | Color Source                 |
+| ---------------------------- | ---------------------------- |
+| Sonnet disabled              | Configured colors            |
+| Compression returns color    | Compression color            |
+| Compression returns no color | Configured colors (fallback) |
+| Compression fails            | Configured colors (fallback) |
+
+**ColorConverter Utility:**
+
+```python
+# Supports multiple input formats
+ColorConverter.css_to_ansi256("lightblue")  # CSS name
+ColorConverter.css_to_ansi256("#A5D8FF")     # Hex with #
+ColorConverter.css_to_ansi256("A5D8FF")      # Hex without #
+# Returns: ANSI 256 color code (0-255)
+```
+
+**RGB to ANSI 256 Algorithm:**
+
+- Grayscale: Detects R=G=B, maps to grayscale ramp (232-255)
+- Color cube: Uses 6x6x6 cube with increments [0x00, 0x5F, 0x87, 0xAF, 0xD7, 0xFF]
+- Formula: `16 + 36*r + 6*g + b` (where r,g,b ∈ [0,5])
 
 ## State Management
 
