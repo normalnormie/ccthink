@@ -100,7 +100,7 @@ class CompressEntriesHandler:
     async def _compress_content(content: str, config: Config, content_type: str) -> str | None:
         """Compress a single content string using Sonnet transformation.
 
-        If compression fails, applies configured color as fallback if sonnet_colors is enabled.
+        If compression fails, applies configured color as fallback if colors is enabled.
 
         Args:
             content: Content to compress.
@@ -113,7 +113,7 @@ class CompressEntriesHandler:
         cmd = TransformThinkingCommand(
             thinking_lines=[content],
             enable_streaming=config.sonnet_streaming,
-            enable_colors=config.sonnet_colors,
+            enable_colors=config.colors,
         )
         resp = await TransformThinkingHandler.handle(cmd, config=config)
 
@@ -121,10 +121,10 @@ class CompressEntriesHandler:
             return str(resp.transformed_lines[0])
 
         # Compression failed, apply configured color if colors enabled
-        if config.sonnet_colors:
+        if config.colors:
             logger.warning("Compression failed for %s content, using configured color fallback", content_type)
             color_code = _get_configured_color_code(config, content_type)
-            formatter = ColoredFormatter(enable_colors=config.sonnet_colors)
+            formatter = ColoredFormatter(enable_colors=config.colors)
             colored_content: str = formatter.format(content, color_code)
             return colored_content
 

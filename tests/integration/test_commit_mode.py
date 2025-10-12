@@ -25,7 +25,7 @@ def config_sonnet_enabled() -> Config:
     return Config(
         sonnet_enabled=True,
         sonnet_streaming=True,
-        sonnet_colors=True,
+        colors=True,
         verbose=True,
     )
 
@@ -40,7 +40,7 @@ def config_sonnet_disabled() -> Config:
     return Config(
         sonnet_enabled=False,
         sonnet_streaming=False,
-        sonnet_colors=False,
+        colors=False,
         verbose=True,
     )
 

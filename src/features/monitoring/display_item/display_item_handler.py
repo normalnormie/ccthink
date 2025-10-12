@@ -154,7 +154,7 @@ class DisplayItemHandler:
                     TransformThinkingCommand(
                         thinking_lines=[content],
                         enable_streaming=config.sonnet_streaming,
-                        enable_colors=config.sonnet_colors,
+                        enable_colors=config.colors,
                     ),
                     config=config,
                 )
@@ -164,10 +164,10 @@ class DisplayItemHandler:
             # Check if compressed content has color, apply configured color if not
             final_lines = []
             for line in transformed_lines:
-                if config.sonnet_colors and not _has_ansi_color_codes(line):
+                if config.colors and not _has_ansi_color_codes(line):
                     # Compression returned no color, apply configured color
                     color_code = _get_configured_color(config, content_type)
-                    formatter = ColoredFormatter(enable_colors=config.sonnet_colors)
+                    formatter = ColoredFormatter(enable_colors=config.colors)
                     colored_line = formatter.format(line, color_code)
                     final_lines.append(colored_line)
                 else:
@@ -185,9 +185,9 @@ class DisplayItemHandler:
                 logger.warning("%s", error)
         else:
             # Sonnet disabled: apply configured colors to raw content if colors enabled
-            if config.sonnet_colors:
+            if config.colors:
                 color_code = _get_configured_color(config, content_type)
-                formatter = ColoredFormatter(enable_colors=config.sonnet_colors)
+                formatter = ColoredFormatter(enable_colors=config.colors)
                 display_content = formatter.format(content, color_code)
             else:
                 display_content = content

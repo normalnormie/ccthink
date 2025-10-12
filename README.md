@@ -103,7 +103,7 @@ ccthink stores settings in `ccthink.conf` in your project directory. On first ru
   "commit_enabled": false,
   "sonnet_enabled": false,
   "sonnet_streaming": false,
-  "sonnet_colors": false,
+  "colors": false,
   "tool_uses": true,
   "thinking_enabled": true,
   "chat_text_enabled": false,
@@ -119,16 +119,22 @@ ccthink stores settings in `ccthink.conf` in your project directory. On first ru
 
 Change behavior with CLI flags that persist to configuration:
 
-| Flag             | Effect                             | Persists |
-| ---------------- | ---------------------------------- | -------- |
-| `--commit`       | Enable git commits                 | Yes      |
-| `--no-commit`    | Disable git commits                | Yes      |
-| `--sonnet`       | Enable phrase compression          | Yes      |
-| `--no-sonnet`    | Disable phrase compression         | Yes      |
-| `--streaming`    | Stream compression output          | Yes      |
-| `--no-streaming` | Show compression results instantly | Yes      |
-| `--colors`       | Apply sentiment-based colors       | Yes      |
-| `--no-colors`    | Display plain text                 | Yes      |
+| Flag             | Effect                                    | Persists |
+| ---------------- | ----------------------------------------- | -------- |
+| `--commit`       | Enable git commits                        | Yes      |
+| `--no-commit`    | Disable git commits                       | Yes      |
+| `--sonnet`       | Enable phrase compression                 | Yes      |
+| `--no-sonnet`    | Disable phrase compression                | Yes      |
+| `--colors`       | Apply sentiment-based colors              | Yes      |
+| `--no-colors`    | Display plain text                        | Yes      |
+| `--chat-text`    | Enable chat text content extraction       | Yes      |
+| `--no-chat-text` | Disable chat text content (thinking only) | Yes      |
+| `--streaming`    | Stream compression output                 | Yes      |
+| `--no-streaming` | Show compression results instantly        | Yes      |
+| `--verbose`      | Enable verbose logging with timestamps    | Yes      |
+| `--no-verbose`   | Disable verbose logging                   | Yes      |
+| `--simulate`     | Enable dry-run mode (skip git operations) | Yes      |
+| `--no-simulate`  | Disable dry-run mode (perform git ops)    | Yes      |
 
 **Example workflow:**
 

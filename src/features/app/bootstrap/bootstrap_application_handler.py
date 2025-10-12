@@ -74,10 +74,10 @@ class BootstrapApplicationHandler:
             config_modified = True
 
         if command.enable_colors:
-            config.sonnet_colors = True
+            config.colors = True
             config_modified = True
         elif command.disable_colors:
-            config.sonnet_colors = False
+            config.colors = False
             config_modified = True
 
         if command.enable_chat_text:

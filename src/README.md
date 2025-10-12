@@ -44,7 +44,7 @@ Configuration is stored per-project in `ccthink.conf` and globally in `~/.config
   "commit_enabled": false,
   "sonnet_enabled": false,
   "sonnet_streaming": false,
-  "sonnet_colors": false,
+  "colors": false,
   "thinking_enabled": true,
   "chat_text_enabled": false,
   "poll_interval_seconds": 1.0,

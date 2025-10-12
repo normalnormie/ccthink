@@ -273,7 +273,7 @@ def main() -> None:
     # Build feature lists grouped by state
     all_features = [
         ("commit", enable_git), ("sonnet", config.sonnet_enabled),
-        ("colors", config.sonnet_colors), ("chat_text", config.chat_text_enabled),
+        ("colors", config.colors), ("chat_text", config.chat_text_enabled),
         ("verbose", config.verbose), ("simulate", config.simulate),
         ("streaming", config.sonnet_streaming),
     ]

@@ -122,7 +122,7 @@ class Config(BaseModel):
     commit_enabled: bool
     sonnet_enabled: bool
     sonnet_streaming: bool
-    sonnet_colors: bool
+    colors: bool
     thinking_enabled: bool
     chat_text_enabled: bool
 

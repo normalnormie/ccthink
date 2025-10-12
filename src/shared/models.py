@@ -228,7 +228,7 @@ class Config(BaseModel):
     commit_enabled: bool = Field(default=False, description="Enable git commit operations")
     sonnet_enabled: bool = Field(default=False, description="Enable Sonnet phrase transformation")
     sonnet_streaming: bool = Field(default=True, description="Enable streaming output for compression")
-    sonnet_colors: bool = Field(default=True, description="Enable colored output for compressed phrases")
+    colors: bool = Field(default=True, description="Enable colored output for all content")
     tool_uses: bool = Field(default=True, description="Display tool use calls during monitoring")
     thinking_enabled: bool = Field(default=True, description="Enable thinking content extraction and display")
     chat_text_enabled: bool = Field(default=False, description="Enable chat text content extraction and display")
@@ -252,7 +252,8 @@ class Config(BaseModel):
     def load_from_file(cls, config_path: Path) -> Config:
         """Load configuration from JSON file.
 
-        Handles backwards compatibility for text_enabled -> chat_text_enabled migration.
+        Handles backwards compatibility for text_enabled -> chat_text_enabled
+        and sonnet_colors -> colors migrations.
 
         Args:
             config_path: Path to configuration file.
@@ -269,6 +270,10 @@ class Config(BaseModel):
             # Backwards compatibility: migrate text_enabled to chat_text_enabled
             if "text_enabled" in data and "chat_text_enabled" not in data:
                 data["chat_text_enabled"] = data.pop("text_enabled")
+
+            # Backwards compatibility: migrate sonnet_colors to colors
+            if "sonnet_colors" in data and "colors" not in data:
+                data["colors"] = data.pop("sonnet_colors")
 
             return cls.model_validate(data)
 

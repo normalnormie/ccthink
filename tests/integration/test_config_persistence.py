@@ -24,7 +24,7 @@ class TestConfigurationPersistence:
         config = Config(
             sonnet_enabled=True,
             sonnet_streaming=False,
-            sonnet_colors=True,
+            colors=True,
             verbose=True,
         )
 
@@ -37,7 +37,7 @@ class TestConfigurationPersistence:
         # Verify all settings persisted
         assert loaded_config.sonnet_enabled is True
         assert loaded_config.sonnet_streaming is False
-        assert loaded_config.sonnet_colors is True
+        assert loaded_config.colors is True
         assert loaded_config.verbose is True
 
     def test_config_load_nonexistent_file(self, tmp_path: Path) -> None:
@@ -49,7 +49,7 @@ class TestConfigurationPersistence:
         # Should have default values
         assert loaded_config.sonnet_enabled is False
         assert loaded_config.sonnet_streaming is True
-        assert loaded_config.sonnet_colors is True
+        assert loaded_config.colors is True
 
     def test_config_all_sonnet_flags(self, tmp_path: Path) -> None:
         """All Sonnet-related flags persist correctly."""
@@ -58,7 +58,7 @@ class TestConfigurationPersistence:
         config = Config(
             sonnet_enabled=True,
             sonnet_streaming=True,
-            sonnet_colors=True,
+            colors=True,
         )
 
         config.save_to_file(config_path)
@@ -66,7 +66,7 @@ class TestConfigurationPersistence:
 
         assert loaded.sonnet_enabled is True
         assert loaded.sonnet_streaming is True
-        assert loaded.sonnet_colors is True
+        assert loaded.colors is True
 
     def test_config_sonnet_disabled_persists(self, tmp_path: Path) -> None:
         """Disabled Sonnet settings persist correctly."""
@@ -75,7 +75,7 @@ class TestConfigurationPersistence:
         config = Config(
             sonnet_enabled=False,
             sonnet_streaming=False,
-            sonnet_colors=False,
+            colors=False,
         )
 
         config.save_to_file(config_path)
@@ -83,7 +83,7 @@ class TestConfigurationPersistence:
 
         assert loaded.sonnet_enabled is False
         assert loaded.sonnet_streaming is False
-        assert loaded.sonnet_colors is False
+        assert loaded.colors is False
 
     def test_config_partial_sonnet_settings(self, tmp_path: Path) -> None:
         """Partial Sonnet settings persist independently."""
@@ -93,7 +93,7 @@ class TestConfigurationPersistence:
         config = Config(
             sonnet_enabled=True,
             sonnet_streaming=False,
-            sonnet_colors=False,
+            colors=False,
         )
 
         config.save_to_file(config_path)
@@ -101,7 +101,7 @@ class TestConfigurationPersistence:
 
         assert loaded.sonnet_enabled is True
         assert loaded.sonnet_streaming is False
-        assert loaded.sonnet_colors is False
+        assert loaded.colors is False
 
     def test_config_other_settings_unaffected(self, tmp_path: Path) -> None:
         """Sonnet settings don't affect other config values."""
@@ -110,7 +110,7 @@ class TestConfigurationPersistence:
         config = Config(
             sonnet_enabled=True,
             sonnet_streaming=True,
-            sonnet_colors=True,
+            colors=True,
             verbose=True,
             simulate=True,
             main_branch="main",
@@ -123,7 +123,7 @@ class TestConfigurationPersistence:
         # Verify Sonnet settings
         assert loaded.sonnet_enabled is True
         assert loaded.sonnet_streaming is True
-        assert loaded.sonnet_colors is True
+        assert loaded.colors is True
 
         # Verify other settings preserved
         assert loaded.verbose is True
@@ -138,7 +138,7 @@ class TestConfigurationPersistence:
         config = Config(
             sonnet_enabled=True,
             sonnet_streaming=False,
-            sonnet_colors=True,
+            colors=True,
         )
 
         config.save_to_file(config_path)
@@ -149,7 +149,7 @@ class TestConfigurationPersistence:
 
         assert "sonnet_enabled" in data
         assert "sonnet_streaming" in data
-        assert "sonnet_colors" in data
+        assert "colors" in data
         assert data["sonnet_enabled"] is True
         assert data["sonnet_streaming"] is False
-        assert data["sonnet_colors"] is True
+        assert data["colors"] is True
