@@ -10,7 +10,7 @@ ccthink watches your Claude Code conversation sessions, extracts thinking conten
 
 ## Related projects
 
-1. Patch Claude Code to always show thinking
+1. Patch CC to always show thinking
    https://github.com/aleks-apostle/claude-code-thinking-patch
 2. CC chats in real-time on a web UI `npx claude-code-templates@latest --chats`
    https://github.com/davila7/claude-code-templates
