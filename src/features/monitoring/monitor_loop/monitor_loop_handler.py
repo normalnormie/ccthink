@@ -21,26 +21,26 @@ from src.features.git_operations.ensure_branch.ensure_branch_command import (
 from src.features.git_operations.ensure_branch.ensure_branch_handler import (
     EnsureBranchHandler,
 )
-from src.features.git_operations.merge_branch.merge_branch_command import (
-    MergeBranchCommand,
-)
-from src.features.git_operations.merge_branch.merge_branch_handler import (
-    MergeBranchHandler,
-)
 from src.features.monitoring.compress_entries.compress_entries_command import (
     CompressEntriesCommand,
 )
 from src.features.monitoring.compress_entries.compress_entries_handler import (
     CompressEntriesHandler,
 )
-from src.features.monitoring.display_item.display_item_command import DisplayItemCommand
-from src.features.monitoring.display_item.display_item_handler import DisplayItemHandler
 from src.features.monitoring.find_current_jsonl.find_current_jsonl_command import (
     FindCurrentJsonlCommand,
 )
 from src.features.monitoring.find_current_jsonl.find_current_jsonl_handler import (
     FindCurrentJsonlHandler,
 )
+from src.features.monitoring.monitor_loop.commit_formatter import (
+    format_entries_for_commit,
+)
+from src.features.monitoring.monitor_loop.commit_helper import (
+    commit_accumulated_thinking,
+)
+from src.features.monitoring.monitor_loop.display_coordinator import DisplayCoordinator
+from src.features.monitoring.monitor_loop.file_switch_helper import process_file_switch
 from src.features.monitoring.monitor_loop.monitor_loop_command import (
     MonitorLoopCommand,
 )
@@ -52,10 +52,6 @@ from src.features.monitoring.parse_thinking.parse_thinking_command import (
 )
 from src.features.monitoring.parse_thinking.parse_thinking_handler import (
     ParseThinkingHandler,
-)
-from src.features.phrase_transformation.line_formatter.format_thinking_line import (
-    format_thinking_line,
-    strip_ansi_codes,
 )
 from src.features.processing.process_thinking.process_thinking_command import (
     ProcessThinkingCommand,
@@ -76,8 +72,8 @@ logger = logging.getLogger(__name__)
 class MonitorLoopHandler:
     """Handler for monitor loop operations."""
 
-    # Track if we've shown any thinking in this session (for separator logic)
-    _has_shown_thinking: bool = False
+    # Display coordinator manages separator logic
+    _display_coordinator = DisplayCoordinator()
 
     @staticmethod
     def _get_claude_dir(command: MonitorLoopCommand) -> Path:
@@ -108,37 +104,10 @@ class MonitorLoopHandler:
         Returns:
             Response with config after commit
         """
-        config = command.config
-
-        if not config.waiting_for_thinking:
-            return MonitorLoopResponse(config=config, timer_task=command.timer_task)
-
-        # Skip commit if both content types are disabled
-        if not config.thinking_enabled and not config.chat_text_enabled:
-            config.waiting_for_thinking = False
-            config.accumulated_thinking = []
-            config.waiting_target_uuid = ""
-            SaveConfigHandler.handle(SaveConfigCommand(config=config, config_path=get_config_path()))
-            return MonitorLoopResponse(config=config, timer_task=command.timer_task)
-
-        # Content already compressed (if sonnet enabled), strip ANSI codes for commit
-        formatted_entries = []
-        for line in config.accumulated_thinking:
-            clean_line = strip_ansi_codes(line)
-            formatted_lines = format_thinking_line(clean_line, max_length=config.line_max_length)
-            formatted_entries.append("\n".join(formatted_lines))
-        content = "\n\n---\n\n".join(formatted_entries)
-
-        if command.enable_git:
-            CommitThinkingHandler.handle(CommitThinkingCommand(message=content, simulate=config.simulate))
-
-        config.last_processed_uuid = config.waiting_target_uuid
-        config.waiting_for_thinking = False
-        config.accumulated_thinking = []
-        config.waiting_target_uuid = ""
-        SaveConfigHandler.handle(SaveConfigCommand(config=config, config_path=get_config_path()))
-
-        return MonitorLoopResponse(config=config, timer_task=command.timer_task)
+        config, timer_task = commit_accumulated_thinking(
+            command.config, enable_git=command.enable_git, timer_task=command.timer_task
+        )
+        return MonitorLoopResponse(config=config, timer_task=timer_task)
 
     @staticmethod
     async def _process_file_switch(
@@ -149,31 +118,14 @@ class MonitorLoopHandler:
         Returns:
             Response with config after file switch
         """
-        config = command.config
-        if config.verbose:
-            logger.info("Monitoring: %s", current_file)
-
-        if config.monitored_file and command.enable_git:
-            if config.waiting_for_thinking:
-                resp = await MonitorLoopHandler._commit_thinking(command)
-                config = resp.config
-
-            branch = Path(config.monitored_file).stem
-            merge_cmd = MergeBranchCommand(
-                source_branch=branch,
-                target_branch=config.main_branch,
-                quit_on_conflict=config.quit_on_conflict,
-            )
-            MergeBranchHandler.handle(merge_cmd)
-
-        config.monitored_file = str(current_file)
-        config.last_file_position = current_file.stat().st_size
-        config.last_processed_uuid = ""
-        config.waiting_for_thinking = False
-        config.accumulated_thinking = []
-        SaveConfigHandler.handle(SaveConfigCommand(config=config, config_path=get_config_path()))
-
-        return MonitorLoopResponse(config=config, timer_task=command.timer_task)
+        config, timer_task = process_file_switch(
+            command.config,
+            current_file,
+            enable_git=command.enable_git,
+            timer_task=command.timer_task,
+            verbose=command.config.verbose,
+        )
+        return MonitorLoopResponse(config=config, timer_task=timer_task)
 
     @staticmethod
     async def handle(command: MonitorLoopCommand) -> MonitorLoopResponse:  # noqa: PLR0914
@@ -228,28 +180,9 @@ class MonitorLoopHandler:
             compressed_text_map = compress_resp.compressed_text_map
 
         # Display parsed items
-        for item in parse_resp.ordered_items:
-            has_thinking = item.thinking_entry is not None and item.thinking_entry.get_thinking_content() is not None
-            show_separator = MonitorLoopHandler._has_shown_thinking and has_thinking
-
-            # Get compressed content for this entry
-            compressed_thinking = None
-            compressed_text = None
-            if item.thinking_entry:
-                compressed_thinking = compressed_thinking_map.get(item.thinking_entry.parent_uuid)
-                compressed_text = compressed_text_map.get(item.thinking_entry.parent_uuid)
-
-            await DisplayItemHandler.handle(
-                DisplayItemCommand(
-                    item=item,
-                    config=config,
-                    show_separator=show_separator,
-                    compressed_thinking=compressed_thinking,
-                    compressed_text=compressed_text,
-                )
-            )
-            if has_thinking:
-                MonitorLoopHandler._has_shown_thinking = True
+        await MonitorLoopHandler._display_coordinator.display_items(
+            parse_resp, config, compressed_thinking_map, compressed_text_map
+        )
 
         if command.enable_git:
             EnsureBranchHandler.handle(EnsureBranchCommand(branch_name=find_resp.jsonl_path.stem))
@@ -272,12 +205,8 @@ class MonitorLoopHandler:
                     timer_task.cancel()
                     timer_task = None
             else:
-                # Content is already compressed (if sonnet enabled), strip ANSI codes for commit
-                formatted_entries = [
-                    "\n".join(format_thinking_line(strip_ansi_codes(line), max_length=config.line_max_length))
-                    for line in proc_resp.thinking_to_commit
-                ]
-                content = "\n\n---\n\n".join(formatted_entries)
+                # Content is already compressed (if sonnet enabled), format for commit
+                content = format_entries_for_commit(proc_resp.thinking_to_commit, config.line_max_length)
                 if command.enable_git:
                     CommitThinkingHandler.handle(
                         CommitThinkingCommand(message=content, simulate=config.simulate)
