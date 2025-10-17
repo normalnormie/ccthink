@@ -51,9 +51,17 @@ def commit_accumulated_thinking(
     # Content already compressed (if sonnet enabled), format for commit
     content = format_entries_for_commit(config.accumulated_thinking, config.line_max_length)
 
+    commit_response = None
     if enable_git:
-        CommitThinkingHandler.handle(CommitThinkingCommand(message=content, simulate=config.simulate))
+        commit_response = CommitThinkingHandler.handle(CommitThinkingCommand(message=content, simulate=config.simulate))
 
+    # Only clear accumulated state if commit actually succeeded with content
+    if commit_response and commit_response.nothing_to_commit:
+        # Nothing to commit - preserve accumulated state for next commit attempt
+        SaveConfigHandler.handle(SaveConfigCommand(config=config, config_path=get_config_path()))
+        return config, timer_task
+
+    # Commit succeeded or git disabled - clear state
     config.last_processed_uuid = config.waiting_target_uuid
     config.waiting_for_thinking = False
     config.accumulated_thinking = []

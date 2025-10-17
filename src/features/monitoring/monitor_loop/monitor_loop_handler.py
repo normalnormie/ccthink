@@ -187,6 +187,11 @@ class MonitorLoopHandler:
         if command.enable_git:
             EnsureBranchHandler.handle(EnsureBranchCommand(branch_name=find_resp.jsonl_path.stem))
 
+        # Save accumulated state before ProcessThinkingHandler modifies it
+        old_waiting = config.waiting_for_thinking
+        old_accumulated = config.accumulated_thinking.copy()
+        old_target_uuid = config.waiting_target_uuid
+
         proc_resp = ProcessThinkingHandler.handle(
             ProcessThinkingCommand(
                 entries=parse_resp.entries,
@@ -207,14 +212,24 @@ class MonitorLoopHandler:
             else:
                 # Content is already compressed (if sonnet enabled), format for commit
                 content = format_entries_for_commit(proc_resp.thinking_to_commit, config.line_max_length)
+                commit_response = None
                 if command.enable_git:
-                    CommitThinkingHandler.handle(
+                    commit_response = CommitThinkingHandler.handle(
                         CommitThinkingCommand(message=content, simulate=config.simulate)
                     )
-                config.last_processed_uuid = proc_resp.target_uuid
-                if timer_task:
-                    timer_task.cancel()
-                    timer_task = None
+
+                # Only clear accumulated state if commit actually succeeded with content
+                if commit_response and commit_response.nothing_to_commit:
+                    # Nothing to commit - restore accumulated state for next commit attempt
+                    config.waiting_for_thinking = old_waiting
+                    config.accumulated_thinking = old_accumulated
+                    config.waiting_target_uuid = old_target_uuid
+                else:
+                    # Commit succeeded or git disabled - clear state
+                    config.last_processed_uuid = proc_resp.target_uuid
+                    if timer_task:
+                        timer_task.cancel()
+                        timer_task = None
 
         # Handle timer start
         if proc_resp.should_start_timer:
