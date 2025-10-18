@@ -53,6 +53,14 @@ class CommitThinkingHandler:
                 check=True,
             )
 
+            # Ensure ccthink.conf is not staged (defensive measure)
+            subprocess.run(
+                ["git", "rm", "--cached", "ccthink.conf"],  # noqa: S607
+                capture_output=True,
+                text=True,
+                check=False,  # Don't fail if file not in index
+            )
+
             # Create commit
             result = subprocess.run(  # noqa: S603
                 ["git", "commit", "-m", command.message],  # noqa: S607

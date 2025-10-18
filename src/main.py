@@ -5,8 +5,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import sys
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from src.features.app.bootstrap.bootstrap_application_command import (
@@ -15,31 +13,16 @@ from src.features.app.bootstrap.bootstrap_application_command import (
 from src.features.app.bootstrap.bootstrap_application_handler import (
     BootstrapApplicationHandler,
 )
+from src.features.app.graceful_exit.graceful_exit_command import GracefulExitCommand
+from src.features.app.graceful_exit.graceful_exit_handler import GracefulExitHandler
 from src.features.cli.parse_arguments.parse_arguments_command import (
     ParseArgumentsCommand,
 )
 from src.features.cli.parse_arguments.parse_arguments_handler import (
     ParseArgumentsHandler,
 )
-from src.features.config.save_config.save_config_command import SaveConfigCommand
-from src.features.config.save_config.save_config_handler import SaveConfigHandler
-from src.features.git_operations.commit_thinking.commit_thinking_command import (
-    CommitThinkingCommand,
-)
-from src.features.git_operations.commit_thinking.commit_thinking_handler import (
-    CommitThinkingHandler,
-)
-from src.features.git_operations.merge_branch.merge_branch_command import (
-    MergeBranchCommand,
-)
 from src.features.git_operations.merge_branch.merge_branch_handler import (
     MergeBranchHandler,
-)
-from src.features.gitignore.ensure_gitignore.ensure_gitignore_command import (
-    EnsureGitignoreCommand,
-)
-from src.features.gitignore.ensure_gitignore.ensure_gitignore_handler import (
-    EnsureGitignoreHandler,
 )
 from src.features.monitoring.monitor_loop.monitor_loop_command import (
     MonitorLoopCommand,
@@ -47,13 +30,7 @@ from src.features.monitoring.monitor_loop.monitor_loop_command import (
 from src.features.monitoring.monitor_loop.monitor_loop_handler import (
     MonitorLoopHandler,
 )
-from src.shared.constants import (
-    ASCII_LOGO,
-    DEFAULT_PROJECTS_DIR,
-    FALLBACK_PROJECTS_DIR,
-    GITIGNORE_ENTRIES,
-    get_config_path,
-)
+from src.shared.constants import ASCII_LOGO, get_config_path
 
 if TYPE_CHECKING:
     from src.shared.models import Config
@@ -71,112 +48,9 @@ shutdown_event = asyncio.Event()
 timer_task: asyncio.Task[None] | None = None
 
 
-async def commit_thinking(cfg: Config) -> None:  # noqa: RUF029
-    """Commit accumulated thinking."""
-    global config
-    config = cfg
-
-    if not config.waiting_for_thinking:
-        return
-
-    content = "\n\n---\n\n".join(config.accumulated_thinking)
-    cmd = CommitThinkingCommand(message=content, simulate=config.simulate)
-
-    if enable_git:
-        # Ensure ccthink.conf is in .gitignore before committing
-        EnsureGitignoreHandler.handle(
-            EnsureGitignoreCommand(
-                entries=GITIGNORE_ENTRIES,
-                gitignore_path=Path.cwd() / ".gitignore",
-            )
-        )
-        CommitThinkingHandler.handle(cmd)
-
-    config.last_processed_uuid = config.waiting_target_uuid
-    config.waiting_for_thinking = False
-    config.accumulated_thinking = []
-    config.waiting_target_uuid = ""
-    SaveConfigHandler.handle(SaveConfigCommand(config=config, config_path=get_config_path()))
-
-
-def get_claude_dir() -> Path:
-    """Get Claude project directory."""
-    if config is None:
-        msg = "Config not initialized"
-        raise RuntimeError(msg)
-
-    home = Path.home()
-    projects_dir = config.projects_dir
-    if projects_dir.startswith("~/"):
-        projects_dir = str(home / projects_dir[2:])
-
-    project_name = str(Path.cwd()).replace("/", "-")
-    claude_dir = Path(projects_dir) / project_name
-
-    if config.projects_dir == DEFAULT_PROJECTS_DIR and not claude_dir.exists():
-        fallback = home / FALLBACK_PROJECTS_DIR[2:] / project_name
-        if fallback.exists():
-            return fallback
-
-    return claude_dir
-
-
-def ensure_gitignore_and_merge(
-    source_branch: str, target_branch: str, quit_on_conflict: bool, verbose: bool, context: str = ""
-) -> None:
-    """Ensure .gitignore is configured and merge branch."""
-    EnsureGitignoreHandler.handle(
-        EnsureGitignoreCommand(entries=GITIGNORE_ENTRIES, gitignore_path=Path.cwd() / ".gitignore")
-    )
-    response = MergeBranchHandler.handle(
-        MergeBranchCommand(
-            source_branch=source_branch,
-            target_branch=target_branch,
-            quit_on_conflict=quit_on_conflict,
-        )
-    )
-    ctx = f" {context}" if context else ""
-    if response.had_conflict and quit_on_conflict:
-        logger.error("Merge conflict%s: %s", ctx, response.error)
-        sys.exit(1)
-    elif not response.success:
-        logger.error("Merge failed%s: %s", ctx, response.error)
-    elif verbose:
-        logger.info("Merge %s -> %s", source_branch, target_branch)
-
-
-async def process_file_switch(current_file: Path) -> None:
-    """Handle switching to different JSONL file."""
-    if config is None:
-        return
-
-    if config.verbose:
-        logger.info("Monitoring: %s", current_file)
-
-    if config.monitored_file and enable_git:
-        if config.waiting_for_thinking:
-            await commit_thinking(config)
-
-        branch = Path(config.monitored_file).stem
-        ensure_gitignore_and_merge(
-            source_branch=branch,
-            target_branch=config.main_branch,
-            quit_on_conflict=config.quit_on_conflict,
-            verbose=config.verbose,
-            context="during file switch",
-        )
-
-    config.monitored_file = str(current_file)
-    config.last_file_position = current_file.stat().st_size
-    config.last_processed_uuid = ""
-    config.waiting_for_thinking = False
-    config.accumulated_thinking = []
-    SaveConfigHandler.handle(SaveConfigCommand(config=config, config_path=get_config_path()))
-
-
 async def monitor() -> None:
     """Monitor JSONL and process thinking."""
-    global config, timer_task
+    global config, timer_task  # noqa: PLW0603
 
     if config is None:
         return
@@ -195,8 +69,8 @@ async def main_loop() -> None:
     while not shutdown_event.is_set():
         try:
             await monitor()
-        except Exception as e:
-            logger.error(f"Error: {e}", exc_info=True)
+        except Exception:
+            logger.exception("Error in monitoring loop")
 
         try:
             await asyncio.wait_for(shutdown_event.wait(), timeout=config.poll_interval_seconds)
@@ -207,31 +81,14 @@ async def main_loop() -> None:
 
 async def shutdown() -> None:
     """Graceful shutdown."""
-    global config
-
-    logger.info("Shutting down...")
-
-    if config and enable_git:
-        if config.waiting_for_thinking:
-            await commit_thinking(config)
-
-        if config.monitored_file:
-            branch = Path(config.monitored_file).stem
-            if branch != config.main_branch:
-                ensure_gitignore_and_merge(
-                    source_branch=branch,
-                    target_branch=config.main_branch,
-                    quit_on_conflict=config.quit_on_conflict,
-                    verbose=config.verbose,
-                )
-
-    if config:
-        SaveConfigHandler.handle(SaveConfigCommand(config=config, config_path=get_config_path()))
+    await GracefulExitHandler.handle(
+        GracefulExitCommand(config=config, enable_git=enable_git)
+    )
 
 
 def main() -> None:
     """Entry point."""
-    global enable_git, config
+    global enable_git, config  # noqa: PLW0603
 
     # Parse CLI arguments
     parse_cmd = ParseArgumentsCommand()

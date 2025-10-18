@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
+import logging
 import signal
 from collections.abc import Callable  # noqa: TC003
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from src.features.app.bootstrap.bootstrap_application_command import (
     BootstrapApplicationCommand,  # noqa: TC001
@@ -25,9 +27,96 @@ from src.features.gitignore.ensure_gitignore.ensure_gitignore_handler import (
 )
 from src.shared.constants import GITIGNORE_ENTRIES
 
+if TYPE_CHECKING:
+    from src.shared.models import Config
+
+logger = logging.getLogger(__name__)
+
 
 class BootstrapApplicationHandler:
     """Handler for application bootstrap operations."""
+
+    @staticmethod
+    def _apply_cli_overrides(
+        config: Config, command: BootstrapApplicationCommand
+    ) -> bool:
+        """Apply CLI argument overrides to config.
+
+        Args:
+            config: Configuration to update
+            command: Command containing CLI overrides
+
+        Returns:
+            True if config has changes, False otherwise
+        """
+        config_has_changes = False
+
+        if command.enable_commit:
+            config.commit_enabled = True
+            config_has_changes = True
+        elif command.disable_commit:
+            config.commit_enabled = False
+            config_has_changes = True
+
+        if command.enable_sonnet:
+            config.sonnet_enabled = True
+            config_has_changes = True
+        elif command.disable_sonnet:
+            config.sonnet_enabled = False
+            config_has_changes = True
+
+        if command.enable_streaming:
+            config.sonnet_streaming = True
+            config_has_changes = True
+        elif command.disable_streaming:
+            config.sonnet_streaming = False
+            config_has_changes = True
+
+        if command.enable_colors:
+            config.colors = True
+            config_has_changes = True
+        elif command.disable_colors:
+            config.colors = False
+            config_has_changes = True
+
+        if command.enable_chat_text:
+            config.chat_text_enabled = True
+            config_has_changes = True
+        elif command.disable_chat_text:
+            config.chat_text_enabled = False
+            config_has_changes = True
+
+        if command.enable_verbose:
+            config.verbose = True
+            config_has_changes = True
+        elif command.disable_verbose:
+            config.verbose = False
+            config_has_changes = True
+
+        if command.enable_simulate:
+            config.simulate = True
+            config_has_changes = True
+        elif command.disable_simulate:
+            config.simulate = False
+            config_has_changes = True
+
+        return config_has_changes
+
+    @staticmethod
+    def _setup_signal_handlers(shutdown_event_setter: Callable[[], None]) -> None:
+        """Setup signal handlers for graceful shutdown.
+
+        Args:
+            shutdown_event_setter: Callback to set shutdown event
+        """
+        def signal_handler(signum: int, frame: object) -> None:
+            """Handle shutdown signals."""
+            shutdown_event_setter()
+
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+        if hasattr(signal, "SIGHUP"):  # Unix only
+            signal.signal(signal.SIGHUP, signal_handler)
 
     @staticmethod
     def handle(
@@ -50,77 +139,30 @@ class BootstrapApplicationHandler:
         config = load_resp.config
 
         # Apply CLI overrides to config and persist them
-        config_modified = False
+        config_has_changes = BootstrapApplicationHandler._apply_cli_overrides(
+            config, command
+        )
 
-        if command.enable_commit:
-            config.commit_enabled = True
-            config_modified = True
-        elif command.disable_commit:
-            config.commit_enabled = False
-            config_modified = True
-
-        if command.enable_sonnet:
-            config.sonnet_enabled = True
-            config_modified = True
-        elif command.disable_sonnet:
-            config.sonnet_enabled = False
-            config_modified = True
-
-        if command.enable_streaming:
-            config.sonnet_streaming = True
-            config_modified = True
-        elif command.disable_streaming:
-            config.sonnet_streaming = False
-            config_modified = True
-
-        if command.enable_colors:
-            config.colors = True
-            config_modified = True
-        elif command.disable_colors:
-            config.colors = False
-            config_modified = True
-
-        if command.enable_chat_text:
-            config.chat_text_enabled = True
-            config_modified = True
-        elif command.disable_chat_text:
-            config.chat_text_enabled = False
-            config_modified = True
-
-        if command.enable_verbose:
-            config.verbose = True
-            config_modified = True
-        elif command.disable_verbose:
-            config.verbose = False
-            config_modified = True
-
-        if command.enable_simulate:
-            config.simulate = True
-            config_modified = True
-        elif command.disable_simulate:
-            config.simulate = False
-            config_modified = True
-
-        # Persist config if CLI args override settings
-        if config_modified:
-            SaveConfigHandler.handle(SaveConfigCommand(config=config, config_path=command.config_path))
+        if config_has_changes:
+            SaveConfigHandler.handle(
+                SaveConfigCommand(config=config, config_path=command.config_path)
+            )
 
         # Ensure .gitignore entries
-        EnsureGitignoreHandler.handle(
+        gitignore_response = EnsureGitignoreHandler.handle(
             EnsureGitignoreCommand(
                 entries=GITIGNORE_ENTRIES,
                 gitignore_path=Path.cwd() / ".gitignore",
             )
         )
 
-        # Setup signal handlers
-        def signal_handler(signum: int, frame: object) -> None:
-            """Handle shutdown signals."""
-            shutdown_event_setter()
+        if not gitignore_response.success:
+            logger.warning(
+                "Failed to add ccthink.conf to .gitignore: %s",
+                gitignore_response.error,
+            )
 
-        signal.signal(signal.SIGINT, signal_handler)
-        signal.signal(signal.SIGTERM, signal_handler)
-        if hasattr(signal, "SIGHUP"):  # Unix only
-            signal.signal(signal.SIGHUP, signal_handler)
+        # Setup signal handlers
+        BootstrapApplicationHandler._setup_signal_handlers(shutdown_event_setter)
 
         return BootstrapApplicationResponse(config=config)
