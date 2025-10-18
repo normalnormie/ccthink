@@ -91,8 +91,6 @@ class CompressPhraseService:
         for attempt in range(self._options.max_retries):
             try:
                 result = await self._compress_single(phrase)
-                self._circuit_breaker.record_success()
-                return result
             except Exception as e:  # noqa: BLE001 - Must catch all SDK subprocess errors to prevent infinite loops
                 last_exception = e
                 logger.warning("Compression attempt %d/%d failed: %s", attempt + 1, self._options.max_retries, e)
@@ -101,6 +99,9 @@ class CompressPhraseService:
                     delay = self._options.get_retry_delay(attempt)
                     logger.debug("Retrying in %.1fs...", delay)
                     await asyncio.sleep(delay)
+            else:
+                self._circuit_breaker.record_success()
+                return result
 
         # All retries exhausted
         self._circuit_breaker.record_failure()
@@ -135,10 +136,17 @@ class CompressPhraseService:
                     if isinstance(block, TextBlock):
                         result_text += block.text
 
+        # Validate we received a response
+        if not result_text or not result_text.strip():
+            msg = "Agent SDK returned empty response (possibly interrupted or failed)"
+            logger.error("%s - No content received from compression request", msg)
+            raise ValueError(msg)
+
         try:
             return CompressionJsonParser.parse(result_text, strip_ansi=True)
         except Exception as e:
-            logger.exception("JSON parsing failed. Raw: %s", result_text[:200])
+            # Show full raw text in error (not truncated) for debugging
+            logger.exception("JSON parsing failed. Raw response (length: %d): %s", len(result_text), result_text)
             msg = f"Failed to parse JSON: {e}"
             raise ValueError(msg) from e
 
@@ -168,6 +176,7 @@ class CompressPhraseService:
 
     async def compress_streaming(self, phrase: str) -> AsyncIterator[str]:
         """Compress phrase with streaming output.
+
         Args:
             phrase: The phrase to compress.
         Yields:
@@ -195,6 +204,7 @@ class CompressPhraseService:
 
     async def compress_json(self, phrase: str) -> dict[str, str]:
         """Compress phrase and return parsed JSON result with streaming to logger.
+
         This method logs streaming output and returns parsed result.
         Args:
             phrase: The phrase to compress.

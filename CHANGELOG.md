@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Bug Fixes
 
+- Empty Agent SDK responses now detected with clear error message instead of confusing "Invalid result structure"
+- Full response text logged (not truncated) when JSON parsing fails for better debugging
+- Interrupted or failed compression requests now handled with descriptive error messages
 - Gitignore validation errors now properly checked and abort git operations to prevent ccthink.conf commits
 - Additional defensive `git rm --cached ccthink.conf` before commits prevents accidental staging
 - Accumulated thinking content preserved when git has nothing to commit instead of being lost
