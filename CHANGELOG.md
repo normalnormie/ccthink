@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Bug Fixes
+
+- Accumulated thinking content preserved when git has nothing to commit instead of being lost
+
 ## [0.7.1] - 2025-10-12
 
 ### Refactoring
