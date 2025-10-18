@@ -1,6 +1,6 @@
 <p align="center">
-  <img src="ccthink-default.png" alt="ccthink default" width="45%" style="display: inline-block; margin-right: 2%;">
-  <img src="ccthink.png" alt="ccthink with colors" width="45%" style="display: inline-block;">
+  <img src="ccthink-default.png" alt="ccthink default">
+  <img src="ccthink.png" alt="ccthink with colors">
 </p>
 
 # ccthink
