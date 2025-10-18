@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Features
+
+- Haiku model support for phrase compression with `--haiku` and `--no-haiku` CLI flags
+- Model selection displayed in startup status showing active compression model (sonnet/haiku)
+- Dynamic model switching between Sonnet and Haiku without restarting application
+
 ### Bug Fixes
 
 - Gitignore validation errors now properly checked and abort git operations to prevent ccthink.conf commits

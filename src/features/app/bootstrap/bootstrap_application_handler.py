@@ -37,7 +37,7 @@ class BootstrapApplicationHandler:
     """Handler for application bootstrap operations."""
 
     @staticmethod
-    def _apply_cli_overrides(
+    def _apply_cli_overrides(  # noqa: C901
         config: Config, command: BootstrapApplicationCommand
     ) -> bool:
         """Apply CLI argument overrides to config.
@@ -60,8 +60,17 @@ class BootstrapApplicationHandler:
 
         if command.enable_sonnet:
             config.sonnet_enabled = True
+            config.claude_agent.model = "sonnet"
             config_has_changes = True
         elif command.disable_sonnet:
+            config.sonnet_enabled = False
+            config_has_changes = True
+
+        if command.enable_haiku:
+            config.sonnet_enabled = True
+            config.claude_agent.model = "haiku"
+            config_has_changes = True
+        elif command.disable_haiku:
             config.sonnet_enabled = False
             config_has_changes = True
 

@@ -17,6 +17,8 @@ class BootstrapApplicationCommand:
         disable_commit: Disable git commit operations (None if not specified)
         enable_sonnet: Enable Sonnet transformation (None if not specified)
         disable_sonnet: Disable Sonnet transformation (None if not specified)
+        enable_haiku: Enable Haiku transformation (None if not specified)
+        disable_haiku: Disable Haiku transformation (None if not specified)
         enable_streaming: Enable streaming output (None if not specified)
         disable_streaming: Disable streaming output (None if not specified)
         enable_colors: Enable colored output (None if not specified)
@@ -34,6 +36,8 @@ class BootstrapApplicationCommand:
     disable_commit: bool | None = None
     enable_sonnet: bool | None = None
     disable_sonnet: bool | None = None
+    enable_haiku: bool | None = None
+    disable_haiku: bool | None = None
     enable_streaming: bool | None = None
     disable_streaming: bool | None = None
     enable_colors: bool | None = None

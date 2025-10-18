@@ -49,6 +49,13 @@ class ParseArgumentsHandler:
             help="Enable Sonnet phrase compression with sentiment colors (uses Claude Code auth, no API key needed)",
         )
 
+        # Haiku compression
+        enable_group.add_argument(
+            "--haiku",
+            action="store_true",
+            help="Enable Haiku 4.5 phrase compression (faster, lower cost alternative to Sonnet)",
+        )
+
         # Colored output
         enable_group.add_argument(
             "--colors",
@@ -100,6 +107,12 @@ class ParseArgumentsHandler:
         )
 
         disable_group.add_argument(
+            "--no-haiku",
+            action="store_true",
+            help="Disable Haiku phrase compression (show raw thinking)",
+        )
+
+        disable_group.add_argument(
             "--no-colors",
             action="store_true",
             help="Disable colored output (plain text only)",
@@ -136,6 +149,8 @@ class ParseArgumentsHandler:
             disable_commit=args.no_commit or None,
             enable_sonnet=args.sonnet or None,
             disable_sonnet=args.no_sonnet or None,
+            enable_haiku=args.haiku or None,
+            disable_haiku=args.no_haiku or None,
             enable_streaming=args.streaming or None,
             disable_streaming=args.no_streaming or None,
             enable_colors=args.colors or None,

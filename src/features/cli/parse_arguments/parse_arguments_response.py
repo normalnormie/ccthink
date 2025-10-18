@@ -15,6 +15,8 @@ class ParseArgumentsResponse:
         disable_commit: Disable git commit operations (None if not specified)
         enable_sonnet: Enable Sonnet phrase transformation (None if not specified)
         disable_sonnet: Disable Sonnet phrase transformation (None if not specified)
+        enable_haiku: Enable Haiku phrase transformation (None if not specified)
+        disable_haiku: Disable Haiku phrase transformation (None if not specified)
         enable_streaming: Enable streaming output (None if not specified)
         disable_streaming: Disable streaming output (None if not specified)
         enable_colors: Enable colored output (None if not specified)
@@ -31,6 +33,8 @@ class ParseArgumentsResponse:
     disable_commit: bool | None
     enable_sonnet: bool | None
     disable_sonnet: bool | None
+    enable_haiku: bool | None
+    disable_haiku: bool | None
     enable_streaming: bool | None
     disable_streaming: bool | None
     enable_colors: bool | None

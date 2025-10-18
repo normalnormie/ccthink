@@ -99,6 +99,7 @@ def main() -> None:
         config_path=get_config_path(),
         enable_commit=parse_resp.enable_commit, disable_commit=parse_resp.disable_commit,
         enable_sonnet=parse_resp.enable_sonnet, disable_sonnet=parse_resp.disable_sonnet,
+        enable_haiku=parse_resp.enable_haiku, disable_haiku=parse_resp.disable_haiku,
         enable_streaming=parse_resp.enable_streaming, disable_streaming=parse_resp.disable_streaming,
         enable_colors=parse_resp.enable_colors, disable_colors=parse_resp.disable_colors,
         enable_chat_text=parse_resp.enable_chat_text, disable_chat_text=parse_resp.disable_chat_text,
@@ -129,14 +130,21 @@ def main() -> None:
     print(ASCII_LOGO)  # noqa: T201
     # Build feature lists grouped by state
     all_features = [
-        ("commit", enable_git), ("sonnet", config.sonnet_enabled),
+        ("commit", enable_git),
         ("colors", config.colors), ("chat_text", config.chat_text_enabled),
         ("verbose", config.verbose), ("simulate", config.simulate),
         ("streaming", config.sonnet_streaming),
     ]
     active = [name for name, enabled in all_features if enabled]
-    active.append(f"poll: {config.poll_interval_seconds}s")
     inactive = [name for name, enabled in all_features if not enabled]
+
+    # Add compression model info
+    if config.sonnet_enabled:
+        active.append(f"compression: {config.claude_agent.model}")
+    else:
+        inactive.append("compression")
+
+    active.append(f"poll: {config.poll_interval_seconds}s")
 
     logger.info("ccthink started")
     logger.info("  Active: %s", ", ".join(active))

@@ -22,7 +22,7 @@ ccthink watches your Claude Code conversation sessions, extracts thinking conten
 - **Displays thinking/chat** as it arrives from Claude Code sessions
 - **Shows tool uses** (Bash, Read, Write, etc.) in chronological order with thinking (optional)
 - **Accumulates thinking entries** before committing (prevents commit spam)
-- **Compresses phrases** using Sonnet to make thinking more scannable (optional)
+- **Compresses phrases** using Claude models (Sonnet or Haiku) to make thinking more scannable (optional)
 - **Applies sentiment colors** via ANSI 256 codes for visual feedback (optional)
 - **Manages git branches** automatically for each conversation session (optional)
 - **No API keys required** - uses Claude Code's authentication
@@ -85,8 +85,13 @@ ccthink --commit
 # Monitor with Sonnet compression
 ccthink --sonnet
 
+# Monitor with Haiku compression (faster, lower cost)
+ccthink --haiku
+
 # Full features: commits + compression + streaming + colors
 ccthink --commit --sonnet --streaming --colors
+# Or use Haiku for faster compression
+ccthink --commit --haiku --streaming --colors
 
 # Successive starts(maintains the last configuration):
 ccthink
@@ -123,8 +128,10 @@ Change behavior with CLI flags that persist to configuration:
 | ---------------- | ----------------------------------------- | -------- |
 | `--commit`       | Enable git commits                        | Yes      |
 | `--no-commit`    | Disable git commits                       | Yes      |
-| `--sonnet`       | Enable phrase compression                 | Yes      |
-| `--no-sonnet`    | Disable phrase compression                | Yes      |
+| `--sonnet`       | Enable Sonnet phrase compression          | Yes      |
+| `--no-sonnet`    | Disable Sonnet phrase compression         | Yes      |
+| `--haiku`        | Enable Haiku phrase compression           | Yes      |
+| `--no-haiku`     | Disable Haiku phrase compression          | Yes      |
 | `--colors`       | Apply sentiment-based colors              | Yes      |
 | `--no-colors`    | Display plain text                        | Yes      |
 | `--chat-text`    | Enable chat text content extraction       | Yes      |
@@ -139,12 +146,19 @@ Change behavior with CLI flags that persist to configuration:
 **Example workflow:**
 
 ```bash
-# First run: enable commits and compression
+# First run: enable commits and Sonnet compression
 ccthink --commit --sonnet
 # Settings saved to ccthink.conf
 
+# Or use Haiku for faster compression
+ccthink --commit --haiku
+
 # Later: just run ccthink (settings remembered)
 ccthink
+
+# Switch between models
+ccthink --haiku  # Switch to Haiku
+ccthink --sonnet # Switch to Sonnet
 
 # Temporarily disable compression
 ccthink --no-sonnet
@@ -307,9 +321,9 @@ git branch: conversation_abc123
 git branch: conversation_def456
 ```
 
-### Compressing with Sonnet
+### Phrase Compression
 
-Transforms verbose thinking into concise, scannable phrases using Claude's Sonnet model.
+Transforms verbose thinking into concise, scannable phrases using Claude models (Sonnet or Haiku).
 
 **What it does:**
 
@@ -320,6 +334,11 @@ Transforms verbose thinking into concise, scannable phrases using Claude's Sonne
 - Processes up to 3 phrases concurrently
 - Falls back to original text on compression failure
 - No API keys needed (uses Claude Code's authentication)
+
+**Model selection:**
+
+- **Sonnet** (`--sonnet`): Higher quality compression, more detailed
+- **Haiku** (`--haiku`): Faster compression, lower cost, excellent for high-volume use
 
 **Compression examples:**
 
@@ -422,7 +441,7 @@ Extended settings in `ccthink.conf`:
   "projects_dir": "~/.claude/projects/",
   "compression_prompt": "Compress this phrase keeping details, tense, and voice, choosing an ANSI 256 color reflecting its sentiment, output as json {\"color\":\"\",\"text\":\"\"}: {phrase}",
   "claude_agent": {
-    "model": "sonnet",
+    "model": "sonnet", // or "haiku" for faster compression
     "maxTurns": 1,
     "systemPrompt": "Ignore any project context and respond based solely on this query. Output only the compressed phrase.",
     "disallowedTools": [
@@ -549,17 +568,22 @@ Adjust polling and formatting for your workflow:
 
 ### Selective Compression
 
-Enable Sonnet only when needed:
+Enable compression only when needed and switch between models:
 
 ```bash
 # Start without compression
 ccthink --commit
 
-# Enable compression for specific sessions
+# Enable Sonnet compression for specific sessions
 ccthink --sonnet
 
-# Disable again
+# Switch to Haiku for faster compression
+ccthink --haiku
+
+# Disable compression
 ccthink --no-sonnet
+# Or
+ccthink --no-haiku
 ```
 
 Settings persist, so each change updates `ccthink.conf` for future runs.
@@ -576,7 +600,8 @@ Settings persist, so each change updates `ccthink.conf` for future runs.
 
 - Ensure Claude Code is configured with valid authentication
 - Check `~/.claude.json` exists (Claude Code's config)
-- Try `--no-sonnet` to disable compression temporarily
+- Try switching models: `--haiku` or `--sonnet`
+- Try `--no-sonnet` or `--no-haiku` to disable compression temporarily
 
 ### Command not found
 
@@ -692,7 +717,7 @@ The original thinking is always preserved and displayed.
 2. **Parses** thinking entries and tool uses from JSONL records
 3. **Displays** items in chronological order as they occur
 4. **Accumulates** multiple entries for 30 seconds or until more thinking arrives
-5. **Optionally compresses** with Sonnet (concurrently, with caching and retry)
+5. **Optionally compresses** with Claude models (concurrently, with caching and retry)
 6. **Formats** long lines at natural breakpoints for readability
 7. **Commits** to conversation-specific git branch (optional)
 8. **Merges** branches when switching between conversation sessions (optional)

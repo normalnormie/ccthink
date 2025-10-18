@@ -130,7 +130,9 @@ class ClaudeAgentConfig(BaseModel):
         description="Custom system prompt",
         alias="systemPrompt",
     )
-    model: str | None = Field(default="sonnet", description="Specific Claude model to use")
+    model: str | None = Field(
+        default="sonnet", description="Claude model for compression: 'sonnet', 'haiku', or 'opus'"
+    )
     max_turns: int | None = Field(default=1, description="Maximum number of conversation turns", alias="maxTurns")
 
     # Permission options
