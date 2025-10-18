@@ -94,11 +94,22 @@ class GracefulExitHandler:
             quit_on_conflict: Whether to quit on merge conflict
             verbose: Whether to log merge operations
         """
-        EnsureGitignoreHandler.handle(
+        # Ensure ccthink.conf is in .gitignore before merging
+        gitignore_response = EnsureGitignoreHandler.handle(
             EnsureGitignoreCommand(
                 entries=GITIGNORE_ENTRIES, gitignore_path=Path.cwd() / ".gitignore"
             )
         )
+
+        if not gitignore_response.success:
+            logger.error(
+                "Cannot merge during shutdown: failed to add ccthink.conf to .gitignore: %s",
+                gitignore_response.error,
+            )
+            if quit_on_conflict:
+                sys.exit(1)
+            return
+
         response = MergeBranchHandler.handle(
             MergeBranchCommand(
                 source_branch=source_branch,

@@ -106,12 +106,25 @@ class ProcessFileSwitchHandler:
             verbose: Whether to log merge operations
             context: Additional context for error messages
         """
+        ctx = f" {context}" if context else ""
 
-        EnsureGitignoreHandler.handle(
+        # Ensure ccthink.conf is in .gitignore before merging
+        gitignore_response = EnsureGitignoreHandler.handle(
             EnsureGitignoreCommand(
                 entries=GITIGNORE_ENTRIES, gitignore_path=Path.cwd() / ".gitignore"
             )
         )
+
+        if not gitignore_response.success:
+            logger.error(
+                "Cannot merge%s: failed to add ccthink.conf to .gitignore: %s",
+                ctx,
+                gitignore_response.error,
+            )
+            if quit_on_conflict:
+                sys.exit(1)
+            return
+
         response = MergeBranchHandler.handle(
             MergeBranchCommand(
                 source_branch=source_branch,
@@ -119,7 +132,6 @@ class ProcessFileSwitchHandler:
                 quit_on_conflict=quit_on_conflict,
             )
         )
-        ctx = f" {context}" if context else ""
         if response.had_conflict and quit_on_conflict:
             logger.error("Merge conflict%s: %s", ctx, response.error)
             sys.exit(1)
