@@ -9,7 +9,7 @@ The `src/` directory contains the core implementation of **ccthink** ("ultrathin
 - **Real-time JSONL Monitoring**: Watches Claude project conversation files for incoming content
 - **Dual Content Type Support**: Extracts and processes both thinking and text content independently
 - **Smart Accumulation**: Batches multiple entries before committing to reduce noise
-- **AI-Powered Compression**: Optional Sonnet-based phrase transformation with colored terminal output
+- **AI-Powered Compression**: Optional phrase transformation with multiple Claude models (Sonnet 4.5, Haiku 4.5, Opus) and colored terminal output
 - **Git Integration**: Automatic branch management, validation, and commits for each conversation session
 - **Persistent State**: Tracks file positions, UUIDs, and configuration across sessions
 - **Cross-Platform**: Works on Linux, macOS, and Windows
@@ -31,6 +31,9 @@ ccthink --commit
 # Enable Sonnet phrase transformation
 ccthink --sonnet
 
+# Enable Haiku phrase transformation (faster, lower cost)
+ccthink --haiku
+
 # Enable streaming output with colors
 ccthink --sonnet --colors
 ```
@@ -44,7 +47,8 @@ Configuration is stored per-project in `ccthink.conf` and globally in `~/.config
   "commit_enabled": false,
   "sonnet_enabled": false,
   "sonnet_streaming": false,
-  "colors": false,
+  "model": "sonnet",
+  "colors": true,
   "thinking_enabled": true,
   "chat_text_enabled": false,
   "poll_interval_seconds": 1.0,
@@ -54,6 +58,11 @@ Configuration is stored per-project in `ccthink.conf` and globally in `~/.config
 }
 ```
 
+Compression configuration:
+
+- `model`: Claude model for phrase compression - "sonnet", "haiku", or "opus" (default: "sonnet")
+- `colors`: Enable colored output for all content (default: true)
+
 Content type controls:
 
 - `thinking_enabled`: Extract and process thinking content (default: true)
@@ -61,16 +70,18 @@ Content type controls:
 
 ### CLI Flags
 
-| Flag             | Effect                        | Persists |
-| ---------------- | ----------------------------- | -------- |
-| `--commit`       | Enable git commits            | Yes      |
-| `--no-commit`    | Disable git commits           | Yes      |
-| `--sonnet`       | Enable phrase transformation  | Yes      |
-| `--no-sonnet`    | Disable phrase transformation | Yes      |
-| `--streaming`    | Enable streaming output       | Yes      |
-| `--no-streaming` | Disable streaming output      | Yes      |
-| `--colors`       | Enable colored output         | Yes      |
-| `--no-colors`    | Disable colored output        | Yes      |
+| Flag             | Effect                              | Persists |
+| ---------------- | ----------------------------------- | -------- |
+| `--commit`       | Enable git commits                  | Yes      |
+| `--no-commit`    | Disable git commits                 | Yes      |
+| `--sonnet`       | Enable Sonnet phrase transformation | Yes      |
+| `--no-sonnet`    | Disable phrase transformation       | Yes      |
+| `--haiku`        | Enable Haiku phrase transformation  | Yes      |
+| `--no-haiku`     | Disable phrase transformation       | Yes      |
+| `--streaming`    | Enable streaming output             | Yes      |
+| `--no-streaming` | Disable streaming output            | Yes      |
+| `--colors`       | Enable colored output               | Yes      |
+| `--no-colors`    | Disable colored output              | Yes      |
 
 Flags update the persistent configuration, so settings are remembered across sessions.
 
@@ -199,14 +210,14 @@ Core dependencies managed in `requirements.txt`:
 
 ### Feature Modules
 
-- **`features/monitoring/`**: JSONL file monitoring, parsing, display, and compression
+- **`features/monitoring/`**: JSONL file monitoring, parsing, display, compression, and file switching
 - **`features/processing/`**: Content accumulation and commit logic
-- **`features/git_operations/`**: Branch management, validation, and commits
-- **`features/gitignore/`**: .gitignore file management
-- **`features/phrase_transformation/`**: Sonnet compression and formatting
+- **`features/git_operations/`**: Branch management, validation, commits, and accumulated thinking commits
+- **`features/gitignore/`**: .gitignore file management with defensive checking
+- **`features/phrase_transformation/`**: Claude model compression (Sonnet/Haiku/Opus) and formatting
 - **`features/config/`**: Configuration loading and persistence
 - **`features/cli/`**: Argument parsing
-- **`features/app/`**: Application bootstrapping
+- **`features/app/`**: Application bootstrapping and graceful exit handling
 
 ### Shared Components
 
@@ -217,25 +228,35 @@ Core dependencies managed in `requirements.txt`:
 
 ```
 src/
-├── ccthink.py                    # Entry point script
-├── main.py                       # Main application orchestration
-├── shared/                       # Shared models and constants
-│   ├── models.py                 # Pydantic data models
-│   └── constants.py              # Configuration constants
-└── features/                     # Feature-based vertical slices
-    ├── app/                      # Application bootstrapping
-    ├── cli/                      # CLI argument parsing
-    ├── config/                   # Configuration management
-    ├── git_operations/           # Git branch and commit operations
-    ├── gitignore/                # .gitignore management
-    ├── monitoring/               # JSONL monitoring, parsing, display, compression
-    │   ├── find_current_jsonl/   # Current file discovery
-    │   ├── parse_thinking/       # JSONL parsing
-    │   ├── display_item/         # Content display
-    │   ├── compress_entries/     # Batch content compression
-    │   └── monitor_loop/         # Main loop orchestration
-    ├── phrase_transformation/    # Sonnet compression
-    └── processing/               # Content accumulation logic
+├── ccthink.py                                  # Entry point script
+├── main.py                                     # Main application orchestration
+├── shared/                                     # Shared models and constants
+│   ├── models.py                               # Pydantic data models
+│   └── constants.py                            # Configuration constants
+└── features/                                   # Feature-based vertical slices
+    ├── app/                                    # Application bootstrapping
+    │   ├── graceful_exit/                      # Graceful shutdown with commits
+    │   └── get_claude_directory/               # Claude project directory lookup
+    ├── cli/                                    # CLI argument parsing
+    ├── config/                                 # Configuration management
+    ├── git_operations/                         # Git branch and commit operations
+    │   ├── commit_accumulated_thinking/        # Commit batched thinking entries
+    │   ├── commit_thinking/                    # Individual commit operations
+    │   ├── ensure_branch/                      # Branch creation and validation
+    │   └── merge_branch/                       # Branch merging
+    ├── gitignore/                              # .gitignore management
+    ├── monitoring/                             # JSONL monitoring, parsing, display
+    │   ├── find_current_jsonl/                 # Current file discovery
+    │   ├── parse_thinking/                     # JSONL parsing
+    │   ├── display_item/                       # Content display
+    │   ├── compress_entries/                   # Batch content compression
+    │   ├── process_file_switch/                # File switch handling
+    │   └── monitor_loop/                       # Main loop orchestration
+    │       ├── display_coordinator.py          # Display coordination helper
+    │       ├── commit_helper.py                # Commit management helper
+    │       └── commit_formatter.py             # Commit message formatting
+    ├── phrase_transformation/                  # Claude model compression
+    └── processing/                             # Content accumulation logic
 ```
 
 Each feature follows a consistent structure:
@@ -264,8 +285,10 @@ Each feature follows a consistent structure:
 - Each JSONL file (conversation) gets its own branch named by file stem
 - Branches are created automatically on first thinking entry
 - .gitignore is ensured to contain ccthink.conf before any merge or commit
+- Defensive check removes ccthink.conf from git index if accidentally staged
 - When switching to a different conversation, previous branch is merged into main # noqm
 - All commits happen on conversation-specific branches
+- Graceful exit handler commits pending thinking and brings branches into main before shutdown
 
 ### State Management
 
@@ -280,15 +303,16 @@ Persistent state tracked in configuration:
 
 ### Phrase Transformation Pipeline
 
-When Sonnet is enabled:
+When compression is enabled (Sonnet/Haiku/Opus):
 
 1. **Extract Content**: Parse thinking and text content from JSONL (controlled by content type toggles)
 2. **Batch Compress**: Send all entries to CompressEntriesHandler for parallel compression
 3. **Transform**: Each content type sent to Claude Agent SDK with compression prompt
-4. **Parse Response**: Extract compressed phrase and color from JSON response
-5. **Format**: Apply ANSI color codes if colors enabled
-6. **Cache Results**: Store compressed content maps keyed by parent_uuid
-7. **Display/Commit**: Show formatted output with pre-compressed content, commit plain text
+4. **Validate Response**: Ensure Agent SDK returns non-empty content (fail fast if empty)
+5. **Parse Response**: Extract compressed phrase and color from JSON response
+6. **Format**: Apply ANSI color codes if colors enabled
+7. **Cache Results**: Store compressed content maps keyed by parent_uuid
+8. **Display/Commit**: Show formatted output with pre-compressed content, commit plain text
 
 ## Error Handling
 

@@ -32,7 +32,7 @@ graph TD
     Monitor --> Transform[Phrase Transformation]
     Process --> Accumulate[Accumulation Logic]
     Accumulate --> Commit[Commit Decision]
-    Transform --> Sonnet[Claude Agent SDK]
+    Transform --> Claude[Claude Agent SDK]
     Git --> Branch[Branch Management]
     Git --> CommitOp[Commit Operations]
 ```
@@ -41,36 +41,44 @@ graph TD
 
 ```
 src/
-├── ccthink.py                    # Script entry point
-├── main.py                       # Application orchestration
+├── ccthink.py                            # Script entry point
+├── main.py                               # Application orchestration
 ├── shared/
-│   ├── models.py                 # Pydantic data models
-│   ├── constants.py              # Application constants
-│   └── color_converter.py        # CSS/hex to ANSI 256 conversion
+│   ├── models.py                         # Pydantic data models
+│   ├── constants.py                      # Application constants
+│   └── color_converter.py                # CSS/hex to ANSI 256 conversion
 └── features/
-    ├── app/bootstrap/            # Application initialization
-    ├── cli/parse_arguments/      # CLI argument parsing
+    ├── app/
+    │   ├── bootstrap/                    # Application initialization
+    │   ├── graceful_exit/                # Graceful shutdown handling
+    │   └── get_claude_directory/         # Claude project directory lookup
+    ├── cli/parse_arguments/              # CLI argument parsing
     ├── config/
-    │   ├── load_config/          # Configuration loading
-    │   └── save_config/          # Configuration persistence
+    │   ├── load_config/                  # Configuration loading
+    │   └── save_config/                  # Configuration persistence
     ├── git_operations/
-    │   ├── ensure_branch/        # Branch creation
-    │   ├── commit_thinking/      # Commit operations
-    │   └── merge_branch/         # Branch merging
-    ├── gitignore/                # .gitignore management
+    │   ├── ensure_branch/                # Branch creation
+    │   ├── commit_thinking/              # Individual commit operations
+    │   ├── commit_accumulated_thinking/  # Batched thinking commit orchestration
+    │   └── merge_branch/                 # Branch merging
+    ├── gitignore/                        # .gitignore management
     ├── monitoring/
-    │   ├── find_current_jsonl/   # JSONL file discovery
-    │   ├── parse_thinking/       # JSONL parsing (thinking and text)
-    │   ├── display_item/         # Content display handler
-    │   ├── compress_entries/     # Batch compression for entries
-    │   └── monitor_loop/         # Main monitoring cycle
+    │   ├── find_current_jsonl/           # JSONL file discovery
+    │   ├── parse_thinking/               # JSONL parsing (thinking and text)
+    │   ├── display_item/                 # Content display handler
+    │   ├── compress_entries/             # Batch compression for entries
+    │   ├── process_file_switch/          # File switch orchestration
+    │   └── monitor_loop/                 # Main monitoring cycle
+    │       ├── display_coordinator.py    # Display coordination helper
+    │       ├── commit_helper.py          # Commit management helper
+    │       └── commit_formatter.py       # Commit message formatting
     ├── phrase_transformation/
-    │   ├── transform_thinking/   # Sonnet compression
-    │   ├── compress_phrase/      # Compression options
-    │   ├── colored_output/       # ANSI color formatting
-    │   └── line_formatter/       # Line wrapping/formatting
+    │   ├── transform_thinking/           # Claude model compression
+    │   ├── compress_phrase/              # Compression options and service
+    │   ├── colored_output/               # ANSI color formatting
+    │   └── line_formatter/               # Line wrapping/formatting
     └── processing/
-        └── process_thinking/     # Accumulation logic
+        └── process_thinking/             # Accumulation logic
 ```
 
 ## Key Abstractions
@@ -122,7 +130,8 @@ class Config(BaseModel):
     commit_enabled: bool
     sonnet_enabled: bool
     sonnet_streaming: bool
-    colors: bool
+    model: str | None  # "sonnet", "haiku", or "opus"
+    colors: bool       # Colored output for all content
     thinking_enabled: bool
     chat_text_enabled: bool
 
@@ -221,15 +230,16 @@ stateDiagram-v2
 When switching between conversation files (JSONL):
 
 1. **Detect Switch**: Compare current file to monitored file
-2. **Commit Pending**: If waiting, commit accumulated content
-3. **Ensure Gitignore**: Verify ccthink.conf is in .gitignore
-4. **Merge Branch**: Merge previous conversation branch to main
-5. **Reset State**: Clear accumulation, reset file position
-6. **Restart Monitoring**: Begin monitoring current file
+2. **Commit Pending**: If waiting, commit accumulated content using CommitAccumulatedThinkingHandler
+3. **Ensure Gitignore**: Verify ccthink.conf is in .gitignore (fails fast if update fails)
+4. **Defensive Check**: Remove ccthink.conf from git index if accidentally staged
+5. **Bring Branch In**: Integrate previous conversation branch into main
+6. **Reset State**: Clear accumulation, reset file position
+7. **Restart Monitoring**: Begin monitoring current file
 
 ### Phrase Transformation Pipeline
 
-When Sonnet compression is enabled:
+When compression is enabled (Sonnet/Haiku/Opus):
 
 ```mermaid
 graph LR
@@ -237,17 +247,19 @@ graph LR
     B --> C[Batch Compress All Entries]
     C --> D[Transform Each Type]
     D --> E[Claude Agent SDK]
-    E --> F{Parse Response}
-    F -->|Success| G[Compressed + Color]
-    F -->|Failure| H[Fallback to Original]
-    G --> I{Colors Enabled?}
-    I -->|Yes| J[Apply ANSI Codes]
-    I -->|No| K[Plain Text]
-    H --> K
-    J --> L[Store in Maps by UUID]
-    K --> L
-    L --> M[Display with Pre-compressed]
-    L --> N[Commit Plain Text]
+    E --> F{Validate Response}
+    F -->|Empty| G[Fail Fast Error]
+    F -->|Valid| H{Parse JSON}
+    H -->|Success| I[Compressed + Color]
+    H -->|Failure| J[Fallback to Original]
+    I --> K{Colors Enabled?}
+    K -->|Yes| L[Apply ANSI Codes]
+    K -->|No| M[Plain Text]
+    J --> M
+    L --> N[Store in Maps by UUID]
+    M --> N
+    N --> O[Display with Pre-compressed]
+    N --> P[Commit Plain Text]
 ```
 
 ### Content Type Color Application Flow
@@ -256,7 +268,7 @@ Colors are applied to thinking and chat content through a multi-stage process:
 
 ```mermaid
 graph TD
-    A[Parse Content] --> B{Sonnet Enabled?}
+    A[Parse Content] --> B{Compression Enabled?}
     B -->|No| C[Apply Configured Color]
     B -->|Yes| D[Compress Content]
     D --> E{Compression Success?}
@@ -285,7 +297,7 @@ graph TD
 
 | Scenario                     | Color Source                 |
 | ---------------------------- | ---------------------------- |
-| Sonnet disabled              | Configured colors            |
+| Compression disabled         | Configured colors            |
 | Compression returns color    | Compression color            |
 | Compression returns no color | Configured colors (fallback) |
 | Compression fails            | Configured colors (fallback) |
@@ -383,6 +395,14 @@ subprocess.run(
     check=True
 )
 
+# Defensive check: ensure config file not staged
+subprocess.run(
+    ["git", "rm", "--cached", "ccthink.conf"],  # noqa: S607
+    capture_output=True,
+    text=True,
+    check=False  # Don't fail if file not in index
+)
+
 # Handle "nothing to commit" gracefully
 if "nothing to commit" in result.stdout.lower():
     return Response(success=True, nothing_to_commit=True)
@@ -400,6 +420,27 @@ Merge conflict strategies:
 
 1. **Quit Mode** (`quit_on_conflict=True`): Exit immediately
 2. **Continue Mode** (`quit_on_conflict=False`): Log error, continue monitoring
+
+### Graceful Exit Handling
+
+Application shutdown follows a clean teardown sequence:
+
+1. **Signal Handling**: Captures SIGINT/SIGTERM signals
+2. **Commit Pending Content**: If waiting for thinking, commits accumulated entries
+3. **Ensure Gitignore**: Verifies ccthink.conf is in .gitignore before merge
+4. **Defensive Check**: Removes ccthink.conf from git index if accidentally staged
+5. **Branch Consolidation**: If on conversation branch, brings it into main branch
+6. **Persist Config**: Saves final configuration state to disk
+7. **Clean Exit**: Returns success status code
+
+Implementation uses `GracefulExitHandler` which orchestrates:
+
+- `CommitAccumulatedThinkingHandler`: Commits pending thinking if waiting
+- `EnsureGitignoreHandler`: Validates .gitignore contains ccthink.conf
+- `MergeBranchHandler`: Brings conversation branch into main
+- `SaveConfigHandler`: Persists configuration to disk
+
+This ensures no thinking content or git state is lost during shutdown.
 
 ## Performance Considerations
 
@@ -540,7 +581,7 @@ def create_thinking_entry(
 
 ### Custom Transformation Providers
 
-Replace Sonnet with alternative compression engines:
+Replace Claude models (Sonnet/Haiku/Opus) with alternative compression engines:
 
 ```python
 class CustomTransformHandler:
