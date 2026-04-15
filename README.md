@@ -11,6 +11,8 @@ ccthink watches your Claude Code conversation sessions, extracts thinking conten
 
 ## Related projects
 
+1. Stream Claude Code's hidden output (thinking, tool calls, subagents)
+   https://github.com/phiat/claude-esp
 1. Patch CC to always show thinking
    https://github.com/aleks-apostle/claude-code-thinking-patch
 2. CC chats in real-time on a web UI `npx claude-code-templates@latest --chats`
